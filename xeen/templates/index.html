@@ -692,6 +692,24 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
   padding: 6px 8px; font-size: 12px; font-family: monospace;
 }
 
+/* ─── Transitions Panel ─────── */
+.transitions-global {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; margin-bottom: 16px;
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+.transitions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.transition-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px;
+}
+.transition-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; background: var(--surface2); }
+.transition-card .tc-label { font-size: 11px; font-weight: 600; color: var(--text); }
+.transition-card .tc-arrow { font-size: 10px; color: var(--text2); text-align: center; }
+.transition-card select { width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 12px; }
+.cap-copy-row { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.cap-copy-row input[type="number"] { width: 56px; padding: 4px 6px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+
 /* ─── Watermark Configurator ─────── */
 .wm-config {
   background: var(--surface); border: 1px solid var(--border);
@@ -835,8 +853,11 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
   <div class="tab" data-tab="captions">
     <span class="num">5</span>Napisy
   </div>
+  <div class="tab" data-tab="transitions">
+    <span class="num">6</span>Przejścia
+  </div>
   <div class="tab" data-tab="publish">
-    <span class="num">6</span>Publikacja
+    <span class="num">7</span>Publikacja
   </div>
 </div>
 
@@ -1203,11 +1224,48 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 
     <div class="btn-group" style="margin-top:16px">
       <button class="btn btn-outline" onclick="navigateToTab('crop')">← Wstecz</button>
-      <button class="btn btn-success" onclick="saveCaptions(); navigateToTab('publish')">Zapisz i dalej → Publikacja</button>
+      <button class="btn btn-success" onclick="saveCaptions(); navigateToTab('transitions')">Zapisz i dalej → Przejścia</button>
     </div>
   </div>
 
-  <!-- ═══ Tab 6: Publish ═══ -->
+  <!-- ═══ Tab 6: Transitions / Przejścia ═══ -->
+  <div class="panel" id="panel-transitions">
+    <div class="panel-header">
+      <h2>Przejścia między klatkami</h2>
+      <p>Ustaw efekty przejść między klatkami — fade, pixelize, blur. Zarządzaj grupowo lub per klatka.</p>
+    </div>
+
+    <div class="transitions-global" id="transitionsGlobal">
+      <span style="font-size:13px;font-weight:600;color:var(--text)">Zastosuj do wszystkich:</span>
+      <select id="globalTransitionType" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="none">Brak</option>
+        <option value="fade">Fade (zanikanie)</option>
+        <option value="pixelize">Pixelize (pikselizacja)</option>
+        <option value="blur">Blur (rozmycie)</option>
+        <option value="slide_left">Slide ← (przesunięcie)</option>
+        <option value="slide_right">Slide → (przesunięcie)</option>
+      </select>
+      <input type="range" id="globalTransitionDuration" min="0.1" max="1.0" step="0.1" value="0.3"
+             oninput="document.getElementById('globalTransitionDurationVal').textContent=parseFloat(this.value).toFixed(1)+'s'"
+             style="width:100px">
+      <span id="globalTransitionDurationVal" style="font-size:12px;color:var(--text2);white-space:nowrap">0.3s</span>
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:12px" onclick="applyTransitionToAll()">Zastosuj do wszystkich</button>
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:12px" onclick="clearAllTransitions()">Wyczyść</button>
+    </div>
+
+    <div id="transitionsGrid" class="transitions-grid">
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text2);font-size:13px">
+        Załaduj sesję i przejdź tu z zakładki Napisy
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="navigateToTab('captions')">← Wstecz</button>
+      <button class="btn btn-primary" onclick="navigateToTab('publish')">Dalej → Publikacja</button>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 7: Publish ═══ -->
   <div class="panel" id="panel-publish">
     <div class="panel-header">
       <h2>Eksport i publikacja</h2>
@@ -1398,6 +1456,8 @@ let advancedModeOn = false;
 let currentFocusMode = 'mouse';
 let currentZoomLevel = 1.0;
 let currentMousePadding = 20;
+let cropPreviews = {};    // frameIndex -> {filename, w, h} — populated by loadCropPreview
+let transitions = {};     // frameIndex -> {type, duration} — per-frame transition before this frame
 
 // ─── URL Management ───────────────────────────────────────────────────────────
 function parseURL() {
@@ -1791,7 +1851,7 @@ async function persistFrames() {
       method: 'POST',
       body: {
         frames: sessionData.frames,
-        selected_frames: [...selectedFrames].sort(),
+        selected_frames: [...selectedFrames].sort((a, b) => a - b),
       },
     });
   } catch (e) {
@@ -1803,7 +1863,7 @@ async function saveSelection() {
   if (!currentSession) return;
   await api(`/sessions/${currentSession}/select`, {
     method: 'POST',
-    body: { selected_indices: [...selectedFrames].sort() },
+    body: { selected_indices: [...selectedFrames].sort((a, b) => a - b) },
   });
   toast('Zapisano wybór klatek');
 }
@@ -1967,7 +2027,7 @@ function renderAnnotatePanel() {
   if (!sessionData) return;
   const list = document.getElementById('annotateFrameList');
   list.innerHTML = '';
-  const selected = [...selectedFrames].sort();
+  const selected = [...selectedFrames].sort((a, b) => a - b);
 
   selected.forEach((idx, i) => {
     const f = sessionData.frames[idx];
@@ -2004,7 +2064,7 @@ function showAnnotateFrame(idx) {
   // Highlight thumb
   document.querySelectorAll('.annotate-thumb').forEach(t => t.classList.remove('active'));
   const thumbs = document.querySelectorAll('.annotate-thumb');
-  const selected = [...selectedFrames].sort();
+  const selected = [...selectedFrames].sort((a, b) => a - b);
   const ti = selected.indexOf(idx);
   if (ti >= 0 && thumbs[ti]) thumbs[ti].classList.add('active');
 }
@@ -2229,7 +2289,7 @@ async function generateVideoPreview(context) {
       method: 'POST',
       body: {
         preset: activePreset,
-        frame_indices: [...selectedFrames].sort(),
+        frame_indices: [...selectedFrames].sort((a, b) => a - b),
         focus_mode: currentFocusMode,
         zoom_level: currentZoomLevel,
         mouse_padding: currentMousePadding,
@@ -2329,7 +2389,7 @@ function setupCenterCanvas() {
     if (!panel || !panel.classList.contains('active')) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
-    const selected = [...selectedFrames].sort();
+    const selected = [...selectedFrames].sort((a, b) => a - b);
     const curIdx = selected.indexOf(currentCenterFrame);
 
     switch (e.key) {
@@ -2389,7 +2449,7 @@ function renderCenterPanel() {
   if (!sessionData) return;
   const grid = document.getElementById('centerGrid');
   grid.innerHTML = '';
-  const selected = [...selectedFrames].sort();
+  const selected = [...selectedFrames].sort((a, b) => a - b);
 
   selected.forEach((idx) => {
     const f = sessionData.frames[idx];
@@ -2514,7 +2574,7 @@ async function saveCenters() {
 }
 
 function interpolateCenters() {
-  const selected = [...selectedFrames].sort();
+  const selected = [...selectedFrames].sort((a, b) => a - b);
   const marked = selected.filter(i => centerMarks[i]);
   if (marked.length < 2) { toast('Potrzebujesz co najmniej 2 oznaczonych klatek do interpolacji'); return; }
   let filled = 0;
@@ -2599,13 +2659,16 @@ async function loadCropPreview() {
     method: 'POST',
     body: {
       preset: activePreset,
-      frame_indices: [...selectedFrames].sort(),
+      frame_indices: [...selectedFrames].sort((a, b) => a - b),
       focus_mode: currentFocusMode,
       zoom_level: currentZoomLevel,
       mouse_padding: currentMousePadding,
       custom_centers: Object.fromEntries(Object.entries(centerMarks).map(([k,v]) => [k, {x: v.x, y: v.y}])),
     },
   });
+
+  cropPreviews = {};
+  result.previews.forEach(p => { cropPreviews[p.index] = p; });
 
   const cacheBust = Date.now();
   grid.innerHTML = '';
@@ -2646,7 +2709,7 @@ async function exportSession() {
         duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
         fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
         quality: parseInt(document.getElementById('exportQuality').value),
-        frame_indices: [...selectedFrames].sort(),
+        frame_indices: [...selectedFrames].sort((a, b) => a - b),
         focus_mode: currentFocusMode,
         zoom_level: currentZoomLevel,
         mouse_padding: currentMousePadding,
@@ -2714,7 +2777,7 @@ async function initPublishPreview() {
   stopPublishPreview();
 
   // Pick up to 3 selected frames
-  const sel = [...selectedFrames].sort().slice(0, 3);
+  const sel = [...selectedFrames].sort((a, b) => a - b).slice(0, 3);
   if (sel.length === 0) { spinner.style.display = 'none'; return; }
 
   const useWatermark = document.getElementById('publishWatermark')?.checked || false;
@@ -2966,7 +3029,7 @@ async function exportAllFormats() {
           duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
           fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
           quality: parseInt(document.getElementById('exportQuality').value),
-          frame_indices: [...selectedFrames].sort(),
+          frame_indices: [...selectedFrames].sort((a, b) => a - b),
           focus_mode: currentFocusMode,
           zoom_level: currentZoomLevel,
           mouse_padding: currentMousePadding,
@@ -3077,6 +3140,15 @@ async function uploadFiles(files) {
   await loadSession(data.name);
 }
 
+// ─── Cropped image helper ────────────────────────────────────────────────────
+function getCroppedSrc(frameIdx) {
+  const p = cropPreviews[frameIdx];
+  if (p && currentSession) return `/api/sessions/${currentSession}/preview/${p.filename}`;
+  const frames = sessionData?.frames || [];
+  if (frames[frameIdx] && currentSession) return `/api/sessions/${currentSession}/frames/${frames[frameIdx].filename}`;
+  return '';
+}
+
 // ─── Tab Switching ──────────────────────────────────────────────────────────
 function switchTab(name) {
   // Auto-save centers when leaving center tab
@@ -3106,7 +3178,12 @@ function switchTab(name) {
     setTimeout(() => updateVideoPreview(), 100);
   }
   if (name === 'captions') {
+    if (Object.keys(cropPreviews).length === 0 && currentSession) loadCropPreview();
     loadCaptionsPanel();
+  }
+  if (name === 'transitions') {
+    if (Object.keys(cropPreviews).length === 0 && currentSession) loadCropPreview().then(renderTransitionsPanel);
+    else renderTransitionsPanel();
   }
   if (name === 'publish') {
     initPublishPreview();
@@ -3163,17 +3240,12 @@ function renderCaptionsList() {
     row.className = `caption-row${cap.id === activeCaptionId ? ' active' : ''}`;
     row.onclick = () => selectCaption(cap.id);
 
-    const frames = sessionData?.frames || [];
-    const thumbSrc = frames[cap.frame_start]
-      ? `/api/sessions/${currentSession}/frames/${frames[cap.frame_start].filename}`
-      : '';
-
     const rangeLabel = cap.frame_start === cap.frame_end
       ? `#${cap.frame_start + 1}`
       : `#${cap.frame_start + 1}–#${cap.frame_end + 1}`;
 
     row.innerHTML = `
-      <img class="cap-thumb" src="${thumbSrc}" onerror="this.style.opacity=0.2">
+      <img class="cap-thumb" src="${getCroppedSrc(cap.frame_start)}" onerror="this.style.opacity=0.2">
       <span class="cap-text" title="${cap.text}">${cap.text || '(pusty)'}</span>
       <span class="cap-frames">${rangeLabel}</span>
       <button class="cap-del" title="Usuń" onclick="event.stopPropagation(); deleteCaption('${cap.id}')">✕</button>
@@ -3198,10 +3270,7 @@ function renderCaptionEditor() {
   }
 
   const frames = sessionData?.frames || [];
-  const thumbSrc = frames[cap.frame_start]
-    ? `/api/sessions/${currentSession}/frames/${frames[cap.frame_start].filename}`
-    : '';
-
+  const thumbSrc = getCroppedSrc(cap.frame_start);
   const maxFrame = Math.max(0, frames.length - 1);
 
   editor.innerHTML = `
@@ -3219,7 +3288,12 @@ function renderCaptionEditor() {
         ${cap.text || ''}
       </div>
     </div>
-    <p style="font-size:10px;color:var(--text2);margin:0;text-align:center">⬆ Przeciągnij tekst aby zmienić pozycję</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 2px">
+      <p style="font-size:10px;color:var(--text2);margin:0">⬆ Przeciągnij tekst aby zmienić pozycję</p>
+      <span id="capCoordBadge" style="font-size:11px;font-family:monospace;color:var(--accent);background:var(--surface);border:1px solid var(--border);padding:2px 10px;border-radius:4px;white-space:nowrap">
+        X: ${cap.x.toFixed(1)}%  Y: ${cap.y.toFixed(1)}%
+      </span>
+    </div>
 
     <!-- Text content -->
     <div class="cap-field">
@@ -3241,17 +3315,27 @@ function renderCaptionEditor() {
       </div>
     </div>
 
-    <!-- Position -->
+    <!-- Position with synced slider + number input -->
     <div class="cap-row-inline">
       <div class="cap-field">
         <label>Pozycja X (%)</label>
-        <input type="range" min="0" max="100" value="${cap.x}" step="1"
-               oninput="updateCaptionField('x', parseFloat(this.value)); updateOverlay()">
+        <div style="display:flex;gap:5px;align-items:center">
+          <input type="range" id="capXSlider" min="0" max="100" value="${cap.x.toFixed(1)}" step="0.5" style="flex:1"
+                 oninput="setCapPos('x', parseFloat(this.value))">
+          <input type="number" id="capXInput" min="0" max="100" step="0.5" value="${cap.x.toFixed(1)}"
+                 style="width:58px;padding:4px 5px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:monospace"
+                 oninput="setCapPos('x', parseFloat(this.value))">
+        </div>
       </div>
       <div class="cap-field">
         <label>Pozycja Y (%)</label>
-        <input type="range" min="0" max="100" value="${cap.y}" step="1"
-               oninput="updateCaptionField('y', parseFloat(this.value)); updateOverlay()">
+        <div style="display:flex;gap:5px;align-items:center">
+          <input type="range" id="capYSlider" min="0" max="100" value="${cap.y.toFixed(1)}" step="0.5" style="flex:1"
+                 oninput="setCapPos('y', parseFloat(this.value))">
+          <input type="number" id="capYInput" min="0" max="100" step="0.5" value="${cap.y.toFixed(1)}"
+                 style="width:58px;padding:4px 5px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:monospace"
+                 oninput="setCapPos('y', parseFloat(this.value))">
+        </div>
       </div>
     </div>
 
@@ -3312,6 +3396,22 @@ function renderCaptionEditor() {
         </button>
       </div>
     </div>
+
+    <!-- Copy to frames (Canva-style spanning) -->
+    <div class="cap-field" style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+      <label style="font-weight:600">Kopiuj / rozciągnij na klatki</label>
+      <div class="cap-copy-row">
+        <input type="number" id="capCopyCount" min="1" max="50" value="1" title="Liczba kolejnych klatek">
+        <span style="font-size:12px;color:var(--text2)">klatek</span>
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:12px" onclick="copyCaptionToFrames()" title="Utwórz kopie napisu na kolejnych N klatkach">
+          📋 Kopiuj styl
+        </button>
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:12px" onclick="extendCaptionSpan()" title="Rozciągnij zakres klatka_do na N klatek">
+          ↔ Rozciągnij
+        </button>
+      </div>
+      <p style="font-size:10px;color:var(--text2);margin:4px 0 0">Kopiuj styl = nowe napisy na kolejnych klatkach • Rozciągnij = jeden napis na wielu klatkach</p>
+    </div>
   `;
 
   // Enable drag on overlay text
@@ -3344,16 +3444,35 @@ function updateOverlay() {
   overlay.style.fontStyle = cap.italic ? 'italic' : 'normal';
   overlay.style.textAlign = cap.align;
   overlay.textContent = cap.text;
+  // Sync coordinate badge
+  const badge = document.getElementById('capCoordBadge');
+  if (badge) badge.textContent = `X: ${cap.x.toFixed(1)}%  Y: ${cap.y.toFixed(1)}%`;
+  // Sync sliders and number inputs (skip the currently-active element to avoid cursor jump)
+  const active = document.activeElement;
+  const xs = document.getElementById('capXSlider');
+  const xi = document.getElementById('capXInput');
+  const ys = document.getElementById('capYSlider');
+  const yi = document.getElementById('capYInput');
+  if (xs && xs !== active) xs.value = cap.x.toFixed(1);
+  if (xi && xi !== active) xi.value = cap.x.toFixed(1);
+  if (ys && ys !== active) ys.value = cap.y.toFixed(1);
+  if (yi && yi !== active) yi.value = cap.y.toFixed(1);
+}
+
+function setCapPos(axis, value) {
+  const val = Math.max(0, Math.min(100, isNaN(value) ? 0 : parseFloat(value)));
+  const cap = captions.find(c => c.id === activeCaptionId);
+  if (!cap) return;
+  cap[axis] = val;
+  updateOverlay();
 }
 
 function updatePreviewThumb() {
   const cap = captions.find(c => c.id === activeCaptionId);
   const img = document.getElementById('capPreviewImg');
   if (!cap || !img || !sessionData) return;
-  const frames = sessionData.frames || [];
-  if (frames[cap.frame_start]) {
-    img.src = `/api/sessions/${currentSession}/frames/${frames[cap.frame_start].filename}`;
-  }
+  const src = getCroppedSrc(cap.frame_start);
+  if (src) img.src = src;
 }
 
 function setupCaptionDrag() {
@@ -3393,7 +3512,7 @@ function setupCaptionDrag() {
 
 function addCaption() {
   const frames = sessionData?.frames || [];
-  const firstSelected = [...selectedFrames].sort()[0] ?? 0;
+  const firstSelected = [...selectedFrames].sort((a, b) => a - b)[0] ?? 0;
   const newCap = {
     id: capUUID(),
     frame_start: firstSelected,
@@ -3424,7 +3543,7 @@ function deleteCaption(id) {
 }
 
 function autoCaptionsFromFrames() {
-  const selected = [...selectedFrames].sort();
+  const selected = [...selectedFrames].sort((a, b) => a - b);
   if (selected.length === 0) { toast('Zaznacz klatki w zakładce Wybór klatek'); return; }
   captions = selected.map(idx => ({
     id: capUUID(),
@@ -3466,6 +3585,108 @@ function clearAllCaptions() {
   document.getElementById('captionEditor').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2)">Brak napisów</div>';
 }
 
+function copyCaptionToFrames() {
+  const cap = captions.find(c => c.id === activeCaptionId);
+  if (!cap) return;
+  const n = parseInt(document.getElementById('capCopyCount')?.value) || 1;
+  const selected = [...selectedFrames].sort((a, b) => a - b);
+  const curPos = selected.indexOf(cap.frame_start);
+  const targets = selected.slice(curPos + 1, curPos + 1 + n);
+  let added = 0;
+  targets.forEach(idx => {
+    if (!captions.find(c => c.frame_start === idx && c.frame_end === idx)) {
+      captions.push({ ...cap, id: capUUID(), frame_start: idx, frame_end: idx });
+      added++;
+    }
+  });
+  renderCaptionsList();
+  toast(`Skopiowano styl na ${added} klatek`);
+}
+
+function extendCaptionSpan() {
+  const cap = captions.find(c => c.id === activeCaptionId);
+  if (!cap) return;
+  const n = parseInt(document.getElementById('capCopyCount')?.value) || 1;
+  const selected = [...selectedFrames].sort((a, b) => a - b);
+  const curPos = selected.indexOf(cap.frame_start);
+  const endPos = Math.min(curPos + n - 1, selected.length - 1);
+  cap.frame_end = selected[endPos] ?? cap.frame_start;
+  renderCaptionsList();
+  renderCaptionEditor();
+  toast(`Napis rozciągnięty na klatki #${cap.frame_start + 1}–#${cap.frame_end + 1}`);
+}
+
+// ─── Tab 6: Transitions / Przejścia ─────────────────────────────────────────
+const TRANSITION_TYPES = [
+  { value: 'none',        label: 'Brak' },
+  { value: 'fade',        label: '🌅 Fade (zanikanie)' },
+  { value: 'pixelize',    label: '🟦 Pixelize (pikselizacja)' },
+  { value: 'blur',        label: '💨 Blur (rozmycie)' },
+  { value: 'slide_left',  label: '◀ Slide lewo' },
+  { value: 'slide_right', label: '▶ Slide prawo' },
+];
+
+function renderTransitionsPanel() {
+  const grid = document.getElementById('transitionsGrid');
+  if (!grid || !sessionData) return;
+  grid.innerHTML = '';
+  const selected = [...selectedFrames].sort((a, b) => a - b);
+  if (selected.length < 2) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text2);font-size:13px">Zaznacz co najmniej 2 klatki aby ustawić przejścia</div>';
+    return;
+  }
+  selected.forEach((idx, i) => {
+    if (i === 0) return;
+    const tr = transitions[idx] || { type: 'none', duration: 0.3 };
+    const src = getCroppedSrc(idx);
+    const prevSrc = getCroppedSrc(selected[i - 1]);
+    const card = document.createElement('div');
+    card.className = 'transition-card';
+    card.innerHTML = `
+      <div style="display:flex;gap:4px;align-items:center;justify-content:center">
+        <img src="${prevSrc}" style="width:44%;aspect-ratio:16/9;object-fit:cover;border-radius:4px;opacity:0.7" onerror="this.style.opacity=0.1">
+        <span style="font-size:16px;color:var(--text2)">→</span>
+        <img src="${src}" style="width:44%;aspect-ratio:16/9;object-fit:cover;border-radius:4px" onerror="this.style.opacity=0.1">
+      </div>
+      <div class="tc-label">Przejście → klatka #${idx + 1}</div>
+      <select onchange="setTransition(${idx}, 'type', this.value)">
+        ${TRANSITION_TYPES.map(t => `<option value="${t.value}"${tr.type === t.value ? ' selected' : ''}>${t.label}</option>`).join('')}
+      </select>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;color:var(--text2);white-space:nowrap">Czas:</span>
+        <input type="range" min="0.1" max="1.0" step="0.1" value="${tr.duration}"
+               oninput="setTransition(${idx},'duration',parseFloat(this.value));this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)+'s'"
+               style="flex:1">
+        <span style="font-size:11px;color:var(--text2);white-space:nowrap">${parseFloat(tr.duration).toFixed(1)}s</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function setTransition(idx, field, value) {
+  if (!transitions[idx]) transitions[idx] = { type: 'none', duration: 0.3 };
+  transitions[idx][field] = value;
+}
+
+function applyTransitionToAll() {
+  const type = document.getElementById('globalTransitionType')?.value || 'none';
+  const duration = parseFloat(document.getElementById('globalTransitionDuration')?.value || 0.3);
+  const selected = [...selectedFrames].sort((a, b) => a - b);
+  selected.forEach((idx, i) => {
+    if (i === 0) return;
+    transitions[idx] = { type, duration };
+  });
+  renderTransitionsPanel();
+  toast(`Przejście "${TRANSITION_TYPES.find(t=>t.value===type)?.label||type}" zastosowane`);
+}
+
+function clearAllTransitions() {
+  transitions = {};
+  renderTransitionsPanel();
+  toast('Przejścia wyczyszczone');
+}
+
 function updateLlmModelPlaceholder() {
   const provider = document.getElementById('llmProvider').value;
   const modelInput = document.getElementById('llmModel');
@@ -3503,7 +3724,7 @@ async function generateCaptionsLLM() {
   status.textContent = 'Wysyłam obrazy do modelu...';
 
   try {
-    const frameIndices = [...selectedFrames].sort();
+    const frameIndices = [...selectedFrames].sort((a, b) => a - b);
     const result = await fetch(`/api/sessions/${currentSession}/captions/generate`, {
       method: 'POST',
       headers: {
