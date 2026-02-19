@@ -457,52 +457,40 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 .annotate-color-btn.active { border-color: white; box-shadow: 0 0 0 2px var(--accent); }
 .annotate-size-range { width: 80px; vertical-align: middle; }
 
-/* ─── Center Marker ─────── */
-.center-workspace {
-  display: flex; gap: 20px;
+/* ─── Center Grid (new) ─────── */
+.center-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
 }
-.center-frame-list {
-  width: 160px; flex-shrink: 0;
-  display: flex; flex-direction: column; gap: 6px;
-  max-height: 70vh; overflow-y: auto;
+.center-grid-card {
+  border: 2px solid var(--border); border-radius: 8px;
+  overflow: hidden; background: var(--surface);
+  transition: border-color 0.15s;
 }
-.center-thumb {
-  border: 2px solid var(--border); border-radius: 6px;
-  cursor: pointer; overflow: hidden; position: relative;
+.center-grid-card.active  { border-color: var(--accent); }
+.center-grid-card.marked  { border-color: var(--green); }
+.center-grid-card:hover   { border-color: var(--accent); }
+.center-grid-card .cgc-img-wrap {
+  position: relative; cursor: crosshair; overflow: hidden;
 }
-.center-thumb.active { border-color: var(--accent); }
-.center-thumb.marked { border-color: var(--green); }
-.center-thumb img { width: 100%; display: block; }
-.center-thumb .idx { position: absolute; top: 2px; left: 4px; font-size: 10px; color: white; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
-
-.center-canvas-wrap {
-  flex: 1; position: relative; background: var(--surface);
-  border-radius: var(--radius); overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
+.center-grid-card .cgc-img-wrap img {
+  width: 100%; display: block; pointer-events: none;
 }
-.center-canvas-wrap img {
-  max-width: 100%; max-height: 70vh; cursor: crosshair; display: block;
-}
-.crosshair {
-  position: absolute; pointer-events: none;
-}
-.crosshair-h, .crosshair-v {
-  position: absolute; background: var(--red); opacity: 0.7;
-}
-.crosshair-h { height: 1px; width: 100%; left: 0; }
-.crosshair-v { width: 1px; height: 100%; top: 0; }
-.center-dot {
-  position: absolute; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--red); border: 2px solid white;
+.center-grid-card .cgc-dot {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%;
   transform: translate(-50%, -50%); pointer-events: none;
-  box-shadow: 0 0 8px rgba(252,92,124,.5);
+  border: 2px solid white; box-shadow: 0 0 6px rgba(0,0,0,.6);
 }
-.center-info {
-  position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,.7);
-  padding: 6px 12px; border-radius: 6px; font-size: 12px;
+.center-grid-card .cgc-dot.user   { background: var(--green); }
+.center-grid-card .cgc-dot.mouse  { background: var(--red); }
+.center-grid-card .cgc-label {
+  padding: 5px 8px; font-size: 11px; color: var(--text2);
+  display: flex; justify-content: space-between; align-items: center;
 }
+.center-grid-card .cgc-label b { color: var(--text); }
 
-/* ─── Mouse Position Matrix ─────── */
+/* ─── Mouse Position Matrix (kept for compat) ─────── */
 .mouse-matrix-container {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px;
@@ -703,6 +691,57 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
   border: 1px solid var(--border); border-radius: 6px;
   padding: 6px 8px; font-size: 12px; font-family: monospace;
 }
+
+/* ─── Watermark Configurator ─────── */
+.wm-config {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; margin-bottom: 16px;
+}
+.wm-config h4 { font-size: 13px; margin: 0 0 12px 0; color: var(--text); }
+.wm-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.wm-row label { font-size: 11px; color: var(--text2); min-width: 80px; }
+.wm-row input[type="text"],
+.wm-row input[type="number"],
+.wm-row select {
+  flex: 1; background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 8px; font-size: 12px; min-width: 0;
+}
+.wm-row input[type="color"] {
+  width: 36px; height: 28px; border: 1px solid var(--border);
+  border-radius: 6px; cursor: pointer; padding: 2px; background: var(--surface2);
+}
+.wm-preview-wrap {
+  position: relative; display: inline-block;
+  background: #000; border-radius: 6px; overflow: hidden;
+  cursor: crosshair; user-select: none;
+}
+.wm-preview-wrap img { max-width: 100%; max-height: 240px; display: block; object-fit: contain; }
+.wm-pin {
+  position: absolute; pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.wm-pin-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent); border: 2px solid white;
+  box-shadow: 0 0 6px rgba(0,0,0,.6);
+}
+.wm-pin-label {
+  background: rgba(0,0,0,.75); color: white;
+  font-size: 9px; padding: 1px 4px; border-radius: 3px; white-space: nowrap;
+}
+.wm-hint { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+.wm-logo-preview {
+  max-height: 40px; border-radius: 4px; border: 1px solid var(--border);
+  background: repeating-conic-gradient(#444 0% 25%, #222 0% 50%) 0 0 / 10px 10px;
+}
+.wm-transparent-btn {
+  font-size: 11px; padding: 3px 8px; border-radius: 4px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text2); cursor: pointer;
+}
+.wm-transparent-btn.active { border-color: var(--accent); color: var(--accent); }
 
 /* ─── Publish ─────── */
 .publish-section { max-width: 640px; }
@@ -950,26 +989,12 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
       </button>
     </div>
 
-    <div class="center-workspace">
-      <div class="center-frame-list" id="centerFrameList"></div>
-      <div class="center-canvas-wrap" id="centerCanvasWrap">
-        <img id="centerImage" src="" alt="">
-        <div class="crosshair-h" id="crossH" style="display:none"></div>
-        <div class="crosshair-v" id="crossV" style="display:none"></div>
-        <div class="center-dot" id="centerDot" style="display:none"></div>
-        <div class="center-info" id="centerInfo">Kliknij na obrazie</div>
-      </div>
+    <!-- Focus grid: all selected frames, click to set focus point -->
+    <div class="center-grid-header" style="display:flex;align-items:center;gap:12px;margin-bottom:10px;font-size:12px;color:var(--text2)">
+      <span>🟢 = ustawiony fokus &nbsp; 🔴 = sugestia myszy &nbsp; Kliknij na obrazie aby ustawić punkt fokus</span>
+      <span id="centerGridStatus" style="margin-left:auto;color:var(--accent)"></span>
     </div>
-    
-    <!-- Mouse Position Matrix -->
-    <div class="mouse-matrix-container" style="margin-top:20px">
-      <h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text)">🖱️ Pozycje myszy (matrix 3x3)</h4>
-      <div id="mouseMatrix" class="mouse-matrix">
-        <div style="grid-column:1/-1;text-align:center;color:var(--text2);font-size:12px;padding:8px">
-          ⏳ Ładowanie pozycji myszy...
-        </div>
-      </div>
-    </div>
+    <div id="centerGrid" class="center-grid"></div>
     <div class="btn-group">
       <button class="btn btn-outline" onclick="navigateToTab('select')">← Wstecz</button>
       <button class="btn btn-outline" onclick="autoCenters()">Auto (kursor myszy)</button>
@@ -1203,6 +1228,84 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
           </div>
         </div>
         <div id="publishAnimDots" style="margin-top:8px;display:flex;justify-content:center;gap:6px"></div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text2)">
+          🖱️ Kliknij na podglądzie aby ustawić pozycję znaku wodnego
+        </div>
+      </div>
+
+      <!-- Watermark Configurator -->
+      <div class="wm-config">
+        <h4 style="display:flex;align-items:center;gap:8px">
+          🌊 Znak wodny
+          <label style="display:flex;align-items:center;gap:6px;font-weight:normal;font-size:12px;cursor:pointer;margin-left:auto">
+            <input type="checkbox" id="publishWatermark" onchange="wmToggle()" style="accent-color:var(--accent)">
+            Włącz
+          </label>
+        </h4>
+
+        <div id="wmFields" style="display:none">
+          <!-- Position preview -->
+          <div class="wm-hint">Kliknij na podglądzie powyżej aby ustawić pozycję, lub wybierz preset:</div>
+          <div class="wm-row">
+            <label>Pozycja</label>
+            <select id="wmPosition" onchange="wmPositionPreset(this.value)">
+              <option value="bottom_right">↘ Prawy dół</option>
+              <option value="bottom_left">↙ Lewy dół</option>
+              <option value="top_right">↗ Prawy góra</option>
+              <option value="top_left">↖ Lewy góra</option>
+              <option value="center">⊕ Środek</option>
+              <option value="custom">📍 Własna (kliknij)</option>
+            </select>
+            <span id="wmPosDisplay" style="font-size:11px;color:var(--text2);white-space:nowrap"></span>
+          </div>
+
+          <!-- Logo upload -->
+          <div class="wm-row">
+            <label>Logo</label>
+            <input type="file" id="wmLogoFile" accept="image/*" onchange="wmLogoChanged(this)" style="flex:1;font-size:11px">
+            <img id="wmLogoPreview" class="wm-logo-preview" style="display:none">
+            <button class="wm-transparent-btn" onclick="wmClearLogo()" title="Usuń logo">✕</button>
+          </div>
+          <div class="wm-row">
+            <label>Rozmiar logo</label>
+            <input type="range" id="wmLogoSize" min="16" max="256" value="64" step="8"
+                   oninput="document.getElementById('wmLogoSizeVal').textContent=this.value+'px'; wmChanged()">
+            <span id="wmLogoSizeVal" style="font-size:11px;color:var(--text2);white-space:nowrap">64px</span>
+          </div>
+          <div class="wm-row">
+            <label>Opacity logo</label>
+            <input type="range" id="wmLogoOpacity" min="10" max="100" value="80" step="5"
+                   oninput="document.getElementById('wmLogoOpacityVal').textContent=this.value+'%'; wmChanged()">
+            <span id="wmLogoOpacityVal" style="font-size:11px;color:var(--text2);white-space:nowrap">80%</span>
+          </div>
+
+          <!-- Text -->
+          <div class="wm-row">
+            <label>Tekst</label>
+            <input type="text" id="wmText" placeholder="np. example.com" oninput="wmChanged()">
+            <input type="color" id="wmTextColor" value="#ffffff" onchange="wmChanged()" title="Kolor tekstu">
+          </div>
+          <div class="wm-row">
+            <label>Rozmiar tekstu</label>
+            <input type="range" id="wmFontSize" min="10" max="72" value="18" step="2"
+                   oninput="document.getElementById('wmFontSizeVal').textContent=this.value+'px'; wmChanged()">
+            <span id="wmFontSizeVal" style="font-size:11px;color:var(--text2);white-space:nowrap">18px</span>
+          </div>
+
+          <!-- Background -->
+          <div class="wm-row">
+            <label>Tło</label>
+            <input type="color" id="wmBgColor" value="#000000" onchange="wmChanged()" title="Kolor tła">
+            <input type="range" id="wmBgOpacity" min="0" max="100" value="60" step="5"
+                   oninput="document.getElementById('wmBgOpacityVal').textContent=this.value+'%'; wmChanged()">
+            <span id="wmBgOpacityVal" style="font-size:11px;color:var(--text2);white-space:nowrap">60%</span>
+            <button class="wm-transparent-btn" id="wmBgTransparentBtn" onclick="wmSetTransparent()" title="Brak tła">Brak tła</button>
+          </div>
+
+          <button class="btn btn-outline" style="font-size:12px;margin-top:4px" onclick="wmSaveToServer()">
+            💾 Zapisz jako branding.json
+          </button>
+        </div>
       </div>
 
       <div class="export-options">
@@ -1217,8 +1320,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         </div>
         <div class="export-row">
           <label>Jakość:</label>
-          <input type="range" id="exportQuality" min="10" max="100" value="70" step="5" 
-                 oninput="document.getElementById('qualityValue').textContent = this.value + '%'; syncConfigToURL();">
+          <input type="range" id="exportQuality" min="10" max="100" value="70" step="5"
+                 oninput="document.getElementById('qualityValue').textContent = this.value + '%'; syncConfigToURL(); initPublishPreview();">
           <span id="qualityValue" class="range-value">70%</span>
           <div class="range-labels">
             <span>Niska</span><span>Średnia</span><span>Wysoka</span>
@@ -2094,56 +2197,40 @@ async function generateVideoPreview(context) {
 function updateFocusMode(mode) {
   currentFocusMode = mode;
   const zoomControls = document.getElementById('zoomControls');
-  zoomControls.style.display = mode === 'mouse' ? 'block' : 'none';
-  
-  // Sync with export tab
-  document.querySelector('input[name="exportFocusMode"][value="' + mode + '"]').checked = true;
-  
+  if (zoomControls) zoomControls.style.display = mode === 'mouse' ? 'block' : 'none';
+  // Sync radio buttons (both focusMode and exportFocusMode groups)
+  document.querySelectorAll(`input[name="focusMode"][value="${mode}"], input[name="exportFocusMode"][value="${mode}"]`)
+    .forEach(r => { r.checked = true; });
   // Auto-refresh crop preview if on crop tab
   const cropPanel = document.getElementById('panel-crop');
-  if (cropPanel && cropPanel.classList.contains('active')) {
-    loadCropPreview();
-  }
-  
-  // Update video preview
+  if (cropPanel && cropPanel.classList.contains('active')) loadCropPreview();
   updateVideoPreview();
-  
   toast(`Tryb focusu: ${mode === 'screen' ? 'Ekran' : mode === 'mouse' ? 'Mysz' : mode === 'keyboard' ? 'Klawiatura' : 'Aplikacja'}`);
 }
 
 function updateZoom(value) {
   currentZoomLevel = parseFloat(value);
-  document.getElementById('zoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
-  
-  // Sync with export tab
-  document.getElementById('exportZoomSlider').value = value;
-  document.getElementById('exportZoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
-  
-  // Auto-refresh crop preview
+  const zv = document.getElementById('zoomValue');
+  if (zv) zv.textContent = currentZoomLevel.toFixed(1) + 'x';
+  const ezs = document.getElementById('exportZoomSlider');
+  if (ezs) ezs.value = value;
+  const ezv = document.getElementById('exportZoomValue');
+  if (ezv) ezv.textContent = currentZoomLevel.toFixed(1) + 'x';
   const cropPanel = document.getElementById('panel-crop');
-  if (cropPanel && cropPanel.classList.contains('active')) {
-    loadCropPreview();
-  }
-  
-  // Update video preview
+  if (cropPanel && cropPanel.classList.contains('active')) loadCropPreview();
   updateVideoPreview();
 }
 
 function updatePadding(value) {
   currentMousePadding = parseInt(value);
-  document.getElementById('paddingValue').textContent = currentMousePadding + 'px';
-  
-  // Sync with export tab
-  document.getElementById('exportPaddingSlider').value = value;
-  document.getElementById('exportPaddingValue').textContent = currentMousePadding + 'px';
-  
-  // Auto-refresh crop preview
+  const pv = document.getElementById('paddingValue');
+  if (pv) pv.textContent = currentMousePadding + 'px';
+  const eps = document.getElementById('exportPaddingSlider');
+  if (eps) eps.value = value;
+  const epv = document.getElementById('exportPaddingValue');
+  if (epv) epv.textContent = currentMousePadding + 'px';
   const cropPanel = document.getElementById('panel-crop');
-  if (cropPanel && cropPanel.classList.contains('active')) {
-    loadCropPreview();
-  }
-  
-  // Update video preview
+  if (cropPanel && cropPanel.classList.contains('active')) loadCropPreview();
   updateVideoPreview();
 }
 
@@ -2216,87 +2303,11 @@ document.addEventListener('DOMContentLoaded', () => {
   toggleAdvancedMode(false);
 });
 
-// ─── Mouse Position Matrix ─────────────────────────────────────────────
-function renderMouseMatrix() {
-  if (!sessionData) return;
-  
-  const matrix = document.getElementById('mouseMatrix');
-  const selected = [...selectedFrames].sort();
-  
-  if (selected.length === 0) {
-    matrix.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text2);font-size:12px;padding:16px">Brak zaznaczonych klatek</div>';
-    return;
-  }
-  
-  matrix.innerHTML = '';
-  
-  selected.forEach((frameIdx, i) => {
-    if (i >= 9) return; // Max 9 frames in 3x3 grid
-    
-    const frame = sessionData.frames[frameIdx];
-    if (!frame) return;
-    
-    const item = document.createElement('div');
-    item.className = 'mouse-matrix-item';
-    if (frameIdx === currentCenterFrame) item.classList.add('active');
-    if (centerMarks[frameIdx]) item.classList.add('marked');
-    
-    item.onclick = () => showCenterFrame(frameIdx);
-    
-    // Calculate positions for visual markers
-    const centerX = centerMarks[frameIdx]?.x || frame.suggested_center_x || frame.width / 2;
-    const centerY = centerMarks[frameIdx]?.y || frame.suggested_center_y || frame.height / 2;
-    const mouseX = frame.mouse_x || frame.width / 2;
-    const mouseY = frame.mouse_y || frame.height / 2;
-    
-    // Convert to percentages for positioning
-    const centerXPct = (centerX / frame.width) * 100;
-    const centerYPct = (centerY / frame.height) * 100;
-    const mouseXPct = (mouseX / frame.width) * 100;
-    const mouseYPct = (mouseY / frame.height) * 100;
-    
-    item.innerHTML = `
-      <img src="/api/sessions/${currentSession}/frames/${frame.filename}" loading="lazy">
-      <div class="frame-number">#${frameIdx + 1}</div>
-      <div class="mouse-position">🖱️ ${Math.round(mouseX)},${Math.round(mouseY)}</div>
-      ${centerMarks[frameIdx] ? `<div class="center-mark" style="left:${centerXPct}%;top:${centerYPct}%"></div>` : ''}
-      <div class="suggested-center" style="left:${(frame.suggested_center_x / frame.width) * 100}%;top:${(frame.suggested_center_y / frame.height) * 100}%"></div>
-    `;
-    
-    matrix.appendChild(item);
-  });
-  
-  // If more than 9 frames, show indicator
-  if (selected.length > 9) {
-    const more = document.createElement('div');
-    more.style.cssText = 'grid-column:1/-1;text-align:center;color:var(--text2);font-size:11px;padding:8px';
-    more.textContent = `... i ${selected.length - 9} więcej klatek`;
-    matrix.appendChild(more);
-  }
-}
+// ─── Mouse Position Matrix (removed — replaced by center-grid) ─────────────
+function renderMouseMatrix() { /* no-op: replaced by renderCenterPanel grid */ }
 
-// ─── Tab 2: Center Marking ──────────────────────────────────────────────────
+// ─── Tab 3: Center Marking ──────────────────────────────────────────────────
 function setupCenterCanvas() {
-  const wrap = document.getElementById('centerCanvasWrap');
-  const img = document.getElementById('centerImage');
-
-  img.addEventListener('click', (e) => {
-    const rect = img.getBoundingClientRect();
-    const scaleX = img.naturalWidth / rect.width;
-    const scaleY = img.naturalHeight / rect.height;
-    const x = Math.round((e.clientX - rect.left) * scaleX);
-    const y = Math.round((e.clientY - rect.top) * scaleY);
-    setCenter(currentCenterFrame, x, y);
-  });
-
-  img.addEventListener('mousemove', (e) => {
-    const rect = img.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    document.getElementById('crossH').style.cssText = `display:block;top:${py + rect.top - wrap.getBoundingClientRect().top}px`;
-    document.getElementById('crossV').style.cssText = `display:block;left:${px + rect.left - wrap.getBoundingClientRect().left}px`;
-  });
-
   // ── Keyboard shortcuts ──
   document.addEventListener('keydown', (e) => {
     // Only active when center panel is visible
@@ -2362,98 +2373,105 @@ function setupCenterCanvas() {
 
 function renderCenterPanel() {
   if (!sessionData) return;
-  const list = document.getElementById('centerFrameList');
-  list.innerHTML = '';
+  const grid = document.getElementById('centerGrid');
+  grid.innerHTML = '';
   const selected = [...selectedFrames].sort();
 
-  selected.forEach((idx, i) => {
+  selected.forEach((idx) => {
     const f = sessionData.frames[idx];
-    const thumb = document.createElement('div');
     const isMarked = centerMarks[idx] != null;
-    thumb.className = `center-thumb${i === 0 ? ' active' : ''}${isMarked ? ' marked' : ''}`;
-    thumb.onclick = () => showCenterFrame(idx);
-    thumb.innerHTML = `
-      <img src="/api/sessions/${currentSession}/frames/${f.filename}">
-      <span class="idx">#${idx+1} ${isMarked ? '✓' : ''}</span>
+    const mark = centerMarks[idx];
+    const sugX = f.suggested_center_x || Math.round(f.width / 2);
+    const sugY = f.suggested_center_y || Math.round(f.height / 2);
+
+    const card = document.createElement('div');
+    card.className = `center-grid-card${isMarked ? ' marked' : ''}${idx === currentCenterFrame ? ' active' : ''}`;
+    card.id = `cgc-${idx}`;
+
+    // Dot positions as %
+    const markXpct = mark ? (mark.x / f.width * 100).toFixed(2) : null;
+    const markYpct = mark ? (mark.y / f.height * 100).toFixed(2) : null;
+    const sugXpct  = (sugX / f.width * 100).toFixed(2);
+    const sugYpct  = (sugY / f.height * 100).toFixed(2);
+
+    card.innerHTML = `
+      <div class="cgc-img-wrap" id="cgc-wrap-${idx}">
+        <img src="/api/sessions/${currentSession}/frames/${f.filename}" loading="lazy">
+        ${mark ? `<div class="cgc-dot user" style="left:${markXpct}%;top:${markYpct}%"></div>` : ''}
+        <div class="cgc-dot mouse" id="cgc-sug-${idx}" style="left:${sugXpct}%;top:${sugYpct}%"></div>
+      </div>
+      <div class="cgc-label">
+        <b>#${idx + 1}</b>
+        <span id="cgc-info-${idx}">${mark ? `🟢 (${mark.x}, ${mark.y})` : `🔴 sug (${sugX}, ${sugY})`}</span>
+      </div>
     `;
-    list.appendChild(thumb);
+
+    // Click on image → set focus point
+    card.querySelector('.cgc-img-wrap').addEventListener('click', (e) => {
+      const wrap = e.currentTarget;
+      const img  = wrap.querySelector('img');
+      const rect = img.getBoundingClientRect();
+      const scaleX = f.width  / rect.width;
+      const scaleY = f.height / rect.height;
+      const x = Math.round((e.clientX - rect.left)  * scaleX);
+      const y = Math.round((e.clientY - rect.top)   * scaleY);
+      currentCenterFrame = idx;
+      setCenter(idx, x, y);
+    });
+
+    grid.appendChild(card);
   });
 
-  if (selected.length > 0) showCenterFrame(selected[0]);
-  
-  // Render mouse position matrix
-  renderMouseMatrix();
+  updateCenterGridStatus();
+}
+
+function updateCenterGridStatus() {
+  const marked = Object.keys(centerMarks).length;
+  const total  = selectedFrames.size;
+  const el = document.getElementById('centerGridStatus');
+  if (el) el.textContent = `${marked}/${total} klatek z fokusem`;
 }
 
 function showCenterFrame(idx) {
+  // Highlight active card in grid
+  document.querySelectorAll('.center-grid-card').forEach(c => c.classList.remove('active'));
+  const card = document.getElementById(`cgc-${idx}`);
+  if (card) {
+    card.classList.add('active');
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   currentCenterFrame = idx;
-  const f = sessionData.frames[idx];
-  const img = document.getElementById('centerImage');
-  img.src = `/api/sessions/${currentSession}/frames/${f.filename}`;
-
-  // Pokaż zaznaczony środek lub sugestię
-  const center = centerMarks[idx] || {
-    x: f.suggested_center_x,
-    y: f.suggested_center_y,
-  };
-  img.onload = () => updateCenterDot(center.x, center.y);
-
-  // Podświetl thumb
-  document.querySelectorAll('.center-thumb').forEach(t => t.classList.remove('active'));
-  const thumbs = document.querySelectorAll('.center-thumb');
-  const selected = [...selectedFrames].sort();
-  const thumbIdx = selected.indexOf(idx);
-  if (thumbIdx >= 0 && thumbs[thumbIdx]) thumbs[thumbIdx].classList.add('active');
-
-  // Update matrix active state
-  document.querySelectorAll('.mouse-matrix-item').forEach(item => item.classList.remove('active'));
-  const matrixItems = document.querySelectorAll('.mouse-matrix-item');
-  if (matrixItems[thumbIdx]) matrixItems[thumbIdx].classList.add('active');
-
-  document.getElementById('centerInfo').textContent =
-    centerMarks[idx]
-      ? `Środek: (${center.x}, ${center.y})`
-      : `Sugestia (kursor): (${center.x}, ${center.y}) — kliknij aby ustawić`;
 }
 
 function setCenter(idx, x, y) {
+  const f = sessionData.frames[idx];
   centerMarks[idx] = { x, y };
-  updateCenterDot(x, y);
-  document.getElementById('centerInfo').textContent = `Środek: (${x}, ${y})`;
 
-  // Update thumb
-  const thumbs = document.querySelectorAll('.center-thumb');
-  const selected = [...selectedFrames].sort();
-  const thumbIdx = selected.indexOf(idx);
-  if (thumbIdx >= 0 && thumbs[thumbIdx]) {
-    thumbs[thumbIdx].classList.add('marked');
-    thumbs[thumbIdx].querySelector('.idx').textContent = `#${idx+1} ✓`;
+  // Update the card in-place
+  const card = document.getElementById(`cgc-${idx}`);
+  if (card) {
+    card.classList.add('marked');
+    card.classList.add('active');
+
+    // Remove old user dot if any, add new one
+    card.querySelectorAll('.cgc-dot.user').forEach(d => d.remove());
+    const wrap = card.querySelector('.cgc-img-wrap');
+    const dot = document.createElement('div');
+    dot.className = 'cgc-dot user';
+    dot.style.left = (x / f.width * 100).toFixed(2) + '%';
+    dot.style.top  = (y / f.height * 100).toFixed(2) + '%';
+    wrap.appendChild(dot);
+
+    // Update label
+    const info = document.getElementById(`cgc-info-${idx}`);
+    if (info) info.textContent = `🟢 (${x}, ${y})`;
   }
 
-  // Update matrix
-  const matrixItems = document.querySelectorAll('.mouse-matrix-item');
-  if (matrixItems[thumbIdx]) {
-    matrixItems[thumbIdx].classList.add('marked');
-    // Re-render the specific matrix item to show the new center mark
-    renderMouseMatrix();
-  }
-
-  toast(`Środek klatki #${idx+1}: (${x}, ${y})`);
+  updateCenterGridStatus();
+  toast(`Fokus klatki #${idx+1}: (${x}, ${y})`);
 }
 
-function updateCenterDot(cx, cy) {
-  const img = document.getElementById('centerImage');
-  const dot = document.getElementById('centerDot');
-  const rect = img.getBoundingClientRect();
-  const wrap = document.getElementById('centerCanvasWrap').getBoundingClientRect();
-
-  const px = (cx / img.naturalWidth) * rect.width + (rect.left - wrap.left);
-  const py = (cy / img.naturalHeight) * rect.height + (rect.top - wrap.top);
-
-  dot.style.display = 'block';
-  dot.style.left = px + 'px';
-  dot.style.top = py + 'px';
-}
+function updateCenterDot() { /* no-op: replaced by inline grid dots */ }
 
 function autoCenters() {
   [...selectedFrames].forEach(idx => {
@@ -2466,7 +2484,6 @@ function autoCenters() {
     }
   });
   renderCenterPanel();
-  renderMouseMatrix();
   toast('Auto-środki ustawione na pozycji kursora');
 }
 
@@ -2641,7 +2658,9 @@ async function initPublishPreview() {
   const sel = [...selectedFrames].sort().slice(0, 3);
   if (sel.length === 0) { spinner.style.display = 'none'; return; }
 
-  label.textContent = `${sel.length} klatek, loop`;
+  const useWatermark = document.getElementById('publishWatermark')?.checked || false;
+  const quality = parseInt(document.getElementById('exportQuality')?.value || '70');
+  label.textContent = `${sel.length} klatek, loop${useWatermark ? ' 🌊' : ''}`;
 
   try {
     const result = await api(`/sessions/${currentSession}/crop-preview`, {
@@ -2655,8 +2674,16 @@ async function initPublishPreview() {
       },
     });
 
+    let wq = `watermark=${useWatermark ? 1 : 0}&quality=${quality}`;
+    if (useWatermark) {
+      const wmc = wmBuildConfig();
+      if (wmc.logo_position_x !== null) wq += `&wm_px=${wmc.logo_position_x.toFixed(3)}&wm_py=${wmc.logo_position_y.toFixed(3)}`;
+      wq += `&wm_pos=${encodeURIComponent(wmc.logo_position)}`;
+      if (wmc.footer_text) wq += `&wm_text=${encodeURIComponent(wmc.footer_text)}&wm_tc=${encodeURIComponent(wmc.footer_color)}&wm_fs=${wmc.footer_font_size}`;
+      wq += `&wm_bg=${encodeURIComponent(wmc.footer_bg)}`;
+    }
     _publishAnimFrames = result.previews.map(p =>
-      `/api/sessions/${currentSession}/preview/${p.filename}`
+      `/api/sessions/${currentSession}/preview/${p.filename}?${wq}&_t=${Date.now()}`
     );
   } catch (e) {
     // fallback: use raw frame thumbnails
@@ -2708,6 +2735,156 @@ function updatePublishAnimDot(activeIdx) {
   });
 }
 
+// ─── Watermark Configurator ─────────────────────────────────────────────────
+let _wmLogoDataUrl = null;  // base64 data URL of uploaded logo
+let _wmPosX = null;         // custom position 0.0-1.0
+let _wmPosY = null;
+
+function wmToggle() {
+  const on = document.getElementById('publishWatermark').checked;
+  document.getElementById('wmFields').style.display = on ? 'block' : 'none';
+  if (on) wmSetupPreviewClick();
+  initPublishPreview();
+}
+
+function wmSetupPreviewClick() {
+  const wrap = document.querySelector('.wm-preview-wrap') || _wmGetPreviewWrap();
+  if (!wrap) return;
+  if (wrap._wmClickBound) return;
+  wrap._wmClickBound = true;
+  wrap.addEventListener('click', (e) => {
+    const img = wrap.querySelector('img');
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    const xPct = (e.clientX - rect.left) / rect.width;
+    const yPct = (e.clientY - rect.top)  / rect.height;
+    _wmPosX = Math.max(0, Math.min(1, xPct));
+    _wmPosY = Math.max(0, Math.min(1, yPct));
+    document.getElementById('wmPosition').value = 'custom';
+    document.getElementById('wmPosDisplay').textContent =
+      `(${Math.round(_wmPosX * 100)}%, ${Math.round(_wmPosY * 100)}%)`;
+    _wmUpdatePin(wrap, _wmPosX, _wmPosY);
+    wmChanged();
+  });
+}
+
+function _wmGetPreviewWrap() {
+  // The animated preview img container — make it a wm-preview-wrap
+  const imgEl = document.getElementById('publishAnimImg');
+  if (!imgEl) return null;
+  const parent = imgEl.parentElement;
+  if (parent && !parent.classList.contains('wm-preview-wrap')) {
+    parent.classList.add('wm-preview-wrap');
+  }
+  return parent;
+}
+
+function _wmUpdatePin(wrap, xPct, yPct) {
+  let pin = wrap.querySelector('.wm-pin');
+  if (!pin) {
+    pin = document.createElement('div');
+    pin.className = 'wm-pin';
+    pin.innerHTML = '<div class="wm-pin-dot"></div><div class="wm-pin-label">WM</div>';
+    wrap.appendChild(pin);
+  }
+  pin.style.left = (xPct * 100) + '%';
+  pin.style.top  = (yPct * 100) + '%';
+  pin.style.display = 'flex';
+}
+
+function wmPositionPreset(val) {
+  const presets = {
+    bottom_right: [0.92, 0.92],
+    bottom_left:  [0.08, 0.92],
+    top_right:    [0.92, 0.08],
+    top_left:     [0.08, 0.08],
+    center:       [0.50, 0.50],
+  };
+  if (presets[val]) {
+    [_wmPosX, _wmPosY] = presets[val];
+    document.getElementById('wmPosDisplay').textContent =
+      `(${Math.round(_wmPosX * 100)}%, ${Math.round(_wmPosY * 100)}%)`;
+    const wrap = _wmGetPreviewWrap();
+    if (wrap) _wmUpdatePin(wrap, _wmPosX, _wmPosY);
+  }
+  wmChanged();
+}
+
+function wmLogoChanged(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    _wmLogoDataUrl = e.target.result;
+    const prev = document.getElementById('wmLogoPreview');
+    prev.src = _wmLogoDataUrl;
+    prev.style.display = 'inline-block';
+    wmChanged();
+  };
+  reader.readAsDataURL(file);
+}
+
+function wmClearLogo() {
+  _wmLogoDataUrl = null;
+  document.getElementById('wmLogoFile').value = '';
+  const prev = document.getElementById('wmLogoPreview');
+  prev.src = '';
+  prev.style.display = 'none';
+  wmChanged();
+}
+
+function wmSetTransparent() {
+  const btn = document.getElementById('wmBgTransparentBtn');
+  const isTransparent = btn.classList.toggle('active');
+  document.getElementById('wmBgOpacity').disabled = isTransparent;
+  document.getElementById('wmBgColor').disabled   = isTransparent;
+  wmChanged();
+}
+
+function wmBuildConfig() {
+  const transparent = document.getElementById('wmBgTransparentBtn').classList.contains('active');
+  const bgHex = document.getElementById('wmBgColor').value;
+  const bgAlpha = transparent ? 0 : Math.round(parseInt(document.getElementById('wmBgOpacity').value) / 100 * 255);
+  const bgHexAlpha = transparent ? '#00000000' : bgHex + bgAlpha.toString(16).padStart(2, '0');
+
+  return {
+    logo_data:      _wmLogoDataUrl || null,
+    logo_position:  _wmPosX !== null ? 'custom' : document.getElementById('wmPosition').value,
+    logo_position_x: _wmPosX,
+    logo_position_y: _wmPosY,
+    logo_size:      parseInt(document.getElementById('wmLogoSize').value),
+    logo_opacity:   parseInt(document.getElementById('wmLogoOpacity').value) / 100,
+    footer_text:    document.getElementById('wmText').value.trim() || null,
+    footer_font_size: parseInt(document.getElementById('wmFontSize').value),
+    footer_color:   document.getElementById('wmTextColor').value,
+    footer_bg:      bgHexAlpha,
+  };
+}
+
+function wmChanged() {
+  if (document.getElementById('publishWatermark').checked) {
+    initPublishPreview();
+  }
+}
+
+async function wmSaveToServer() {
+  const cfg = wmBuildConfig();
+  try {
+    await api('/branding', { method: 'POST', body: cfg });
+    toast('💾 Zapisano branding.json');
+  } catch (e) {
+    toast('❌ Błąd zapisu: ' + e.message);
+  }
+}
+
+// Wire up preview click on publish tab open
+function _wmInitOnPublish() {
+  setTimeout(() => {
+    const wrap = _wmGetPreviewWrap();
+    if (wrap) wmSetupPreviewClick();
+  }, 300);
+}
+
 async function exportAllFormats() {
   if (!currentSession) return;
   
@@ -2734,6 +2911,7 @@ async function exportAllFormats() {
           focus_mode: currentFocusMode,
           zoom_level: currentZoomLevel,
           mouse_padding: currentMousePadding,
+          watermark: document.getElementById('publishWatermark')?.checked || false,
         },
       }).then(result => ({ format, result }))
       .catch(error => ({ format, error }))
@@ -2865,6 +3043,7 @@ function switchTab(name) {
   }
   if (name === 'publish') {
     initPublishPreview();
+    _wmInitOnPublish();
   } else {
     stopPublishPreview();
   }

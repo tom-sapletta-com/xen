@@ -71,13 +71,22 @@ def apply_watermark(img: Image.Image, branding: dict | None = None) -> Image.Ima
             lw, lh = logo.size
             margin = 12
             pos = branding.get("logo_position", "bottom_right")
-            positions = {
-                "top_left": (margin, margin),
-                "top_right": (iw - lw - margin, margin),
-                "bottom_left": (margin, ih - lh - margin),
-                "bottom_right": (iw - lw - margin, ih - lh - margin),
-            }
-            px, py = positions.get(pos, positions["bottom_right"])
+            px_frac = branding.get("logo_position_x")
+            py_frac = branding.get("logo_position_y")
+            if pos == "custom" and px_frac is not None and py_frac is not None:
+                px = int(px_frac * iw) - lw // 2
+                py = int(py_frac * ih) - lh // 2
+            else:
+                positions = {
+                    "top_left":     (margin, margin),
+                    "top_right":    (iw - lw - margin, margin),
+                    "bottom_left":  (margin, ih - lh - margin),
+                    "bottom_right": (iw - lw - margin, ih - lh - margin),
+                    "center":       ((iw - lw) // 2, (ih - lh) // 2),
+                }
+                px, py = positions.get(pos, positions["bottom_right"])
+            px = max(0, min(px, iw - lw))
+            py = max(0, min(py, ih - lh))
             img.paste(logo, (px, py), logo)
         except Exception:
             pass

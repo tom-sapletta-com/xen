@@ -1,3 +1,16 @@
+## [0.1.15] - 2026-02-19
+
+### Summary
+
+refactor(xeen): configuration management system
+
+### Other
+
+- update xeen/branding.py
+- update xeen/server.py
+- update xeen/templates/index.html
+
+
 ## [0.1.14] - 2026-02-19
 
 ### Summary

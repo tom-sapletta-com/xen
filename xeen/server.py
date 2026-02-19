@@ -163,6 +163,62 @@ async def startup_event():
     logger.info("---")
 
 
+# ─── API: Branding ───────────────────────────────────────────────────────────
+
+class BrandingRequest(BaseModel):
+    logo_data: str | None = None          # base64 data URL
+    logo_position: str = "bottom_right"   # preset or "custom"
+    logo_position_x: float | None = None  # 0.0-1.0 if custom
+    logo_position_y: float | None = None
+    logo_size: int = 64
+    logo_opacity: float = 0.8
+    footer_text: str | None = None
+    footer_font_size: int = 18
+    footer_color: str = "#ffffff"
+    footer_bg: str = "#00000099"
+
+
+@app.get("/api/branding")
+async def get_branding():
+    """Zwróć aktualną konfigurację branding.json."""
+    from xeen.branding import load_branding
+    return load_branding()
+
+
+@app.post("/api/branding")
+async def save_branding(req: BrandingRequest):
+    """Zapisz konfigurację znaku wodnego do ~/.xeen/branding.json."""
+    import base64, io as _io
+    config_path = data_dir() / "branding.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    logo_path = None
+    if req.logo_data and req.logo_data.startswith("data:image"):
+        # Decode base64 and save as logo.png
+        header, b64 = req.logo_data.split(",", 1)
+        logo_bytes = base64.b64decode(b64)
+        logo_path = str(data_dir() / "logo.png")
+        with open(logo_path, "wb") as f:
+            f.write(logo_bytes)
+        logger.info(f"🖼️ **Logo saved**: `{logo_path}`")
+
+    branding = {
+        "logo": logo_path,
+        "logo_position": req.logo_position,
+        "logo_position_x": req.logo_position_x,
+        "logo_position_y": req.logo_position_y,
+        "logo_size": req.logo_size,
+        "logo_opacity": req.logo_opacity,
+        "footer_text": req.footer_text or None,
+        "footer_font_size": req.footer_font_size,
+        "footer_color": req.footer_color,
+        "footer_bg": req.footer_bg,
+    }
+    config_path.write_text(json.dumps(branding, indent=2))
+    logger.info(f"💾 **Branding saved** to `{config_path}`")
+    return {"ok": True, "path": str(config_path)}
+
+
 # ─── API: Sessions ───────────────────────────────────────────────────────────
 
 @app.get("/api/sessions")
@@ -525,14 +581,21 @@ async def crop_preview(name: str, req: CropRequest):
                 cx = frame.get("suggested_center_x", iw // 2)
                 cy = frame.get("suggested_center_y", ih // 2)
 
-        # Oblicz region przycinania z zoomem
+        # Oblicz region przycinania — zawsze zachowuj target aspect ratio
+        # zoom_level > 1 = mniejszy wycinek (bardziej przybliżony)
+        aspect = target_w / target_h
         if req.focus_mode == "mouse":
-            # Dla myszy użyj paddingu wokół kursora
-            crop_w = int((req.mouse_padding * 2) / req.zoom_level)
-            crop_h = int((req.mouse_padding * 2) / req.zoom_level)
+            # Bazuj na mouse_padding jako połowie krótszego boku, skaluj przez zoom
+            base = min(req.mouse_padding * 2, min(iw, ih))
+            base_zoomed = base / req.zoom_level
+            # Dopasuj do aspect ratio targetu
+            if aspect >= 1:  # szerszy niż wysoki
+                crop_h = int(base_zoomed)
+                crop_w = int(crop_h * aspect)
+            else:
+                crop_w = int(base_zoomed)
+                crop_h = int(crop_w / aspect)
         else:
-            # Dla innych trybów użyj target dimensions
-            aspect = target_w / target_h
             if iw / ih > aspect:
                 crop_h = int(ih / req.zoom_level)
                 crop_w = int(crop_h * aspect)
@@ -540,19 +603,19 @@ async def crop_preview(name: str, req: CropRequest):
                 crop_w = int(iw / req.zoom_level)
                 crop_h = int(crop_w / aspect)
 
-        # Ogranicz do rozmiarów obrazu
-        crop_w = min(crop_w, iw)
-        crop_h = min(crop_h, ih)
+        # Ogranicz do rozmiarów obrazu (zachowując aspect ratio)
+        if crop_w > iw:
+            crop_w = iw
+            crop_h = int(crop_w / aspect)
+        if crop_h > ih:
+            crop_h = ih
+            crop_w = int(crop_h * aspect)
+        crop_w = max(1, crop_w)
+        crop_h = max(1, crop_h)
 
-        # Wyśrodkuj na wybranym punkcie
+        # Wyśrodkuj na wybranym punkcie, nie wychodź poza obraz
         left = max(0, min(cx - crop_w // 2, iw - crop_w))
         top = max(0, min(cy - crop_h // 2, ih - crop_h))
-
-        # Jeśli region wychodzi poza obraz, przesuń
-        if left + crop_w > iw:
-            left = iw - crop_w
-        if top + crop_h > ih:
-            top = ih - crop_h
 
         cropped = img.crop((left, top, left + crop_w, top + crop_h))
         cropped = cropped.resize((target_w, target_h), Image.LANCZOS)
@@ -640,20 +703,20 @@ async def generate_video_preview(name: str, req: CropRequest):
         cx = frame.get("suggested_center_x", iw // 2)
         cy = frame.get("suggested_center_y", ih // 2)
 
-    # Oblicz region przycinania z zoomem
+    # Oblicz region przycinania — zawsze zachowuj target aspect ratio
+    aspect = small_target_w / small_target_h
     if req.focus_mode == "mouse":
-        # Dynamicznie ogranicz obszar wokół myszy do mniejszego wymiaru ekranu
-        max_padding = min(iw, ih) // 2  # Maksymalny padding to połowa mniejszego wymiaru
-        effective_padding = min(req.mouse_padding, max_padding)
-        
-        # Oblicz rozmiar crop regionu
-        crop_w = int((effective_padding * 2) / req.zoom_level)
-        crop_h = int((effective_padding * 2) / req.zoom_level)
-        
-        logger.info(f"   - **Effective padding**: `{effective_padding}px` (limited to `{max_padding}px`)")
+        base = min(req.mouse_padding * 2, min(iw, ih))
+        base_zoomed = base / req.zoom_level
+        if aspect >= 1:
+            crop_h = int(base_zoomed)
+            crop_w = int(crop_h * aspect)
+        else:
+            crop_w = int(base_zoomed)
+            crop_h = int(crop_w / aspect)
+        logger.info(f"   - **Crop base**: `{base}px` → zoomed `{base_zoomed:.0f}px`")
         logger.info(f"   - **Screen size**: `{iw}x{ih}px`")
     else:
-        aspect = small_target_w / small_target_h
         if iw / ih > aspect:
             crop_h = int(ih / req.zoom_level)
             crop_w = int(crop_h * aspect)
@@ -661,19 +724,19 @@ async def generate_video_preview(name: str, req: CropRequest):
             crop_w = int(iw / req.zoom_level)
             crop_h = int(crop_w / aspect)
 
-    # Ogranicz do rozmiarów obrazu
-    crop_w = min(crop_w, iw)
-    crop_h = min(crop_h, ih)
+    # Ogranicz do rozmiarów obrazu (zachowując aspect ratio)
+    if crop_w > iw:
+        crop_w = iw
+        crop_h = int(crop_w / aspect)
+    if crop_h > ih:
+        crop_h = ih
+        crop_w = int(crop_h * aspect)
+    crop_w = max(1, crop_w)
+    crop_h = max(1, crop_h)
 
-    # Wyśrodkuj na wybranym punkcie
+    # Wyśrodkuj na wybranym punkcie, nie wychodź poza obraz
     left = max(0, min(cx - crop_w // 2, iw - crop_w))
     top = max(0, min(cy - crop_h // 2, ih - crop_h))
-
-    # Jeśli region wychodzi poza obraz, przesuń
-    if left + crop_w > iw:
-        left = iw - crop_w
-    if top + crop_h > ih:
-        top = ih - crop_h
 
     # Wytnij i zmniejsz szybko (bez LANCZOS dla szybkości)
     cropped = img.crop((left, top, left + crop_w, top + crop_h))
@@ -714,11 +777,60 @@ async def generate_video_preview(name: str, req: CropRequest):
 
 
 @app.get("/api/sessions/{name}/preview/{filename}")
-async def get_preview_image(name: str, filename: str):
+async def get_preview_image(
+    name: str,
+    filename: str,
+    watermark: int = 0,
+    quality: int = 85,
+    # inline watermark config (overrides branding.json when watermark=1)
+    wm_pos: str | None = None,
+    wm_px: float | None = None,
+    wm_py: float | None = None,
+    wm_text: str | None = None,
+    wm_tc: str | None = None,
+    wm_fs: int | None = None,
+    wm_bg: str | None = None,
+):
     filepath = data_dir() / "sessions" / name / "preview" / filename
     if not filepath.exists():
         raise HTTPException(404)
-    return FileResponse(filepath, media_type="image/png")
+
+    # Fast path: no processing needed
+    if not watermark and quality >= 95:
+        return FileResponse(filepath, media_type="image/jpeg" if filename.endswith(".jpg") else "image/png")
+
+    import io
+    img = Image.open(filepath).convert("RGB")
+
+    if watermark:
+        try:
+            from xeen.branding import load_branding, apply_watermark
+            branding = load_branding()
+            # Override with inline params if provided
+            if wm_pos is not None:
+                branding["logo_position"] = wm_pos
+            if wm_px is not None:
+                branding["logo_position_x"] = wm_px
+            if wm_py is not None:
+                branding["logo_position_y"] = wm_py
+            if wm_text is not None:
+                branding["footer_text"] = wm_text or None
+            if wm_tc is not None:
+                branding["footer_color"] = wm_tc
+            if wm_fs is not None:
+                branding["footer_font_size"] = wm_fs
+            if wm_bg is not None:
+                branding["footer_bg"] = wm_bg
+            img = apply_watermark(img, branding)
+        except Exception:
+            pass
+
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=max(10, min(95, quality)), optimize=True)
+    buf.seek(0)
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(buf, media_type="image/jpeg")
 
 
 # ─── API: Tab 4 - Multi-version generation ───────────────────────────────────
@@ -910,6 +1022,7 @@ class ExportRequest(BaseModel):
     focus_mode: str = "screen"  # "screen" | "mouse" | "keyboard" | "application"
     zoom_level: float = 1.0  # 1.0 - 10.0
     mouse_padding: int = 100  # piksele wokół myszy
+    watermark: bool = False
 
 
 @app.post("/api/sessions/{name}/export")
@@ -948,6 +1061,21 @@ async def export_session(name: str, req: ExportRequest):
 
     preset_info = CROP_PRESETS.get(req.preset, {"w": 1920, "h": 1080})
     tw, th = preset_info["w"], preset_info["h"]
+
+    # Apply watermark to preview frames in-place if requested
+    if req.watermark:
+        try:
+            from xeen.branding import load_branding, apply_watermark
+            branding = load_branding()
+            if branding.get("logo") or branding.get("footer_text"):
+                for p in crop_result["previews"]:
+                    fpath = preview_dir / p["filename"]
+                    if fpath.exists():
+                        wm_img = apply_watermark(Image.open(fpath), branding)
+                        wm_img.save(fpath, "PNG")
+                logger.info(f"🌊 **Watermark applied** to `{len(crop_result['previews'])}` frames")
+        except Exception as e:
+            logger.warning(f"⚠️ Watermark failed: {e}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
