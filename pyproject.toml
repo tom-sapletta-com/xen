@@ -3,8 +3,8 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "xen"
-version = "0.1.3"
+name = "xeen"
+version = "0.1.4"
 description = "Screenshot capture → edit → crop → publish. One command: xen"
 readme = "README.md"
 license = "Apache-2.0"
@@ -44,11 +44,11 @@ dev = [
 ]
 
 [project.scripts]
-xen = "xen.cli:main"
+xen-capture = "xen.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/softreck/xen"
-Repository = "https://github.com/softreck/xen"
+Homepage = "https://github.com/softreck/xen-capture"
+Repository = "https://github.com/softreck/xen-capture"
 
 [tool.setuptools.packages.find]
 include = ["xen*"]
