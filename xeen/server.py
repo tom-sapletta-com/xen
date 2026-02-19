@@ -332,6 +332,9 @@ class CropRequest(BaseModel):
     custom_w: int | None = None
     custom_h: int | None = None
     frame_indices: list[int] | None = None  # None = wszystkie zaznaczone
+    focus_mode: str = "screen"  # "screen" | "mouse" | "keyboard" | "application"
+    zoom_level: float = 1.0  # 1.0 - 10.0
+    mouse_padding: int = 100  # piksele wokół myszy
 
 
 @app.post("/api/sessions/{name}/crop-preview")
@@ -373,30 +376,56 @@ async def crop_preview(name: str, req: CropRequest):
         img = Image.open(filepath)
         iw, ih = img.size
 
-        # Środek z custom lub suggested
-        center = custom_centers.get(str(idx))
-        if center:
-            cx, cy = center["x"], center["y"]
-        else:
+        # Wybierz środek w zależności od focus_mode
+        if req.focus_mode == "mouse":
+            # Użyj pozycji myszy z nagrania
+            cx = frame.get("mouse_x", iw // 2)
+            cy = frame.get("mouse_y", ih // 2)
+        elif req.focus_mode == "keyboard":
+            # Dla klawiatury użyj środka dolnej części ekranu (typowa pozycja klawiatury)
             cx = frame.get("suggested_center_x", iw // 2)
-            cy = frame.get("suggested_center_y", ih // 2)
+            cy = int(ih * 0.75)  # 75% wysokości
+        elif req.focus_mode == "application":
+            # Dla aplikacji użyj środka górnej części (typowa pozycja okien)
+            cx = frame.get("suggested_center_x", iw // 2)
+            cy = int(ih * 0.25)  # 25% wysokości
+        else:  # screen
+            # Użyj custom lub suggested
+            center = custom_centers.get(str(idx))
+            if center:
+                cx, cy = center["x"], center["y"]
+            else:
+                cx = frame.get("suggested_center_x", iw // 2)
+                cy = frame.get("suggested_center_y", ih // 2)
 
-        # Oblicz region przycinania z zachowaniem aspect ratio targetu
-        aspect = target_w / target_h
-
-        # Spróbuj zmieścić jak największy box o danym aspect ratio
-        if iw / ih > aspect:
-            # Obraz szerszy — ograniczamy wysokością
-            crop_h = ih
-            crop_w = int(ih * aspect)
+        # Oblicz region przycinania z zoomem
+        if req.focus_mode == "mouse":
+            # Dla myszy użyj paddingu wokół kursora
+            crop_w = int((req.mouse_padding * 2) / req.zoom_level)
+            crop_h = int((req.mouse_padding * 2) / req.zoom_level)
         else:
-            # Obraz wyższy — ograniczamy szerokością
-            crop_w = iw
-            crop_h = int(iw / aspect)
+            # Dla innych trybów użyj target dimensions
+            aspect = target_w / target_h
+            if iw / ih > aspect:
+                crop_h = int(ih / req.zoom_level)
+                crop_w = int(crop_h * aspect)
+            else:
+                crop_w = int(iw / req.zoom_level)
+                crop_h = int(crop_w / aspect)
 
-        # Wyśrodkuj na oznaczonym punkcie
+        # Ogranicz do rozmiarów obrazu
+        crop_w = min(crop_w, iw)
+        crop_h = min(crop_h, ih)
+
+        # Wyśrodkuj na wybranym punkcie
         left = max(0, min(cx - crop_w // 2, iw - crop_w))
         top = max(0, min(cy - crop_h // 2, ih - crop_h))
+
+        # Jeśli region wychodzi poza obraz, przesuń
+        if left + crop_w > iw:
+            left = iw - crop_w
+        if top + crop_h > ih:
+            top = ih - crop_h
 
         cropped = img.crop((left, top, left + crop_w, top + crop_h))
         cropped = cropped.resize((target_w, target_h), Image.LANCZOS)
@@ -410,9 +439,55 @@ async def crop_preview(name: str, req: CropRequest):
             "crop": {"left": left, "top": top, "w": crop_w, "h": crop_h},
             "center": {"x": cx, "y": cy},
             "target": {"w": target_w, "h": target_h},
+            "focus_mode": req.focus_mode,
+            "zoom_level": req.zoom_level,
         })
 
     return {"previews": results, "target": {"w": target_w, "h": target_h}}
+
+
+@app.post("/api/sessions/{name}/video-preview")
+async def generate_video_preview(name: str, req: CropRequest):
+    """Generuj podgląd pierwszej klatki wideo z ustawieniami focus/zoom."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404, "Session not found")
+    meta = json.loads(meta_file.read_text())
+
+    # Użyj tylko pierwszej zaznaczonej klatki
+    selected = req.frame_indices or meta.get("selected_frames", [0])
+    if not selected:
+        selected = [0]
+    first_frame_idx = selected[0]
+    
+    if first_frame_idx >= len(meta.get("frames", [])):
+        raise HTTPException(404, "No frames available")
+
+    # Generuj crop preview tylko dla pierwszej klatki
+    req.frame_indices = [first_frame_idx]
+    crop_result = await crop_preview(name, req)
+    
+    if not crop_result["previews"]:
+        raise HTTPException(404, "Failed to generate preview")
+    
+    preview = crop_result["previews"][0]
+    preview_url = f"/api/sessions/{name}/preview/{preview['filename']}"
+    
+    return {
+        "preview_url": preview_url,
+        "frame_index": preview["index"],
+        "focus_mode": preview["focus_mode"],
+        "zoom_level": preview["zoom_level"],
+        "center": preview["center"],
+        "crop": preview["crop"],
+        "target": preview["target"],
+        "settings": {
+            "preset": req.preset,
+            "focus_mode": req.focus_mode,
+            "zoom_level": req.zoom_level,
+            "mouse_padding": req.mouse_padding,
+        }
+    }
 
 
 @app.get("/api/sessions/{name}/preview/{filename}")
@@ -456,6 +531,10 @@ class ExportRequest(BaseModel):
     duration_per_frame: float = 2.0
     transition: float = 0.3
     fps: int = 2
+    quality: int = 70
+    focus_mode: str = "screen"  # "screen" | "mouse" | "keyboard" | "application"
+    zoom_level: float = 1.0  # 1.0 - 10.0
+    mouse_padding: int = 100  # piksele wokół myszy
 
 
 @app.post("/api/sessions/{name}/export")
@@ -466,8 +545,14 @@ async def export_session(name: str, req: ExportRequest):
     if not meta_file.exists():
         raise HTTPException(404)
 
-    # Najpierw generuj przycięte klatki
-    crop_req = CropRequest(preset=req.preset, frame_indices=req.frame_indices)
+    # Najpierw generuj przycięte klatki z focus mode i zoom
+    crop_req = CropRequest(
+        preset=req.preset, 
+        frame_indices=req.frame_indices,
+        focus_mode=req.focus_mode,
+        zoom_level=req.zoom_level,
+        mouse_padding=req.mouse_padding
+    )
     crop_result = await crop_preview(name, crop_req)
 
     preview_dir = data_dir() / "sessions" / name / "preview"
@@ -488,9 +573,12 @@ async def export_session(name: str, req: ExportRequest):
             img = Image.open(preview_dir / p["filename"])
             images.append(img)
         if images:
+            # Calculate quality for GIF (1-100, where 100 is best)
+            gif_quality = max(1, min(100, req.quality))
             images[0].save(
                 output_path, save_all=True, append_images=images[1:],
                 duration=int(req.duration_per_frame * 1000), loop=0, optimize=True,
+                quality=gif_quality
             )
 
     elif req.format == "webm":
@@ -512,11 +600,16 @@ async def export_session(name: str, req: ExportRequest):
             list_file = f.name
 
         try:
+            # Calculate CRF based on quality (lower CRF = higher quality)
+            # Quality 10-100 -> CRF 50-10 (inverted scale)
+            crf = max(10, min(50, 60 - req.quality // 2))
+            bitrate = f"{max(500, req.quality * 20)}k"
+            
             cmd = [
                 'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
                 '-i', list_file,
                 '-vf', f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2',
-                '-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '1M',
+                '-c:v', 'libvpx-vp9', '-crf', str(crf), '-b:v', bitrate,
                 '-r', str(req.fps),
                 str(output_path),
             ]
@@ -561,11 +654,15 @@ async def export_session(name: str, req: ExportRequest):
             list_file = f.name
 
         try:
+            # Calculate CRF based on quality (lower CRF = higher quality)
+            # Quality 10-100 -> CRF 40-18 (inverted scale)
+            crf = max(18, min(40, 50 - req.quality // 3))
+            
             cmd = [
                 'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
                 '-i', list_file,
                 '-vf', f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2',
-                '-c:v', 'libx264', '-crf', '23', '-pix_fmt', 'yuv420p',
+                '-c:v', 'libx264', '-crf', str(crf), '-pix_fmt', 'yuv420p',
                 '-movflags', '+faststart', '-r', str(req.fps),
                 str(output_path),
             ]

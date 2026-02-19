@@ -358,6 +358,45 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 .preview-icon {
   font-size: 48px; opacity: 0.5;
 }
+
+/* ─── Focus Mode Controls ─────── */
+.focus-option {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface2); cursor: pointer; transition: all 0.2s;
+  font-size: 12px; color: var(--text2);
+}
+.focus-option:hover {
+  border-color: var(--accent); color: var(--text);
+}
+.focus-option input[type="radio"] {
+  accent-color: var(--accent);
+}
+.focus-option input[type="radio"]:checked + span {
+  color: var(--accent); font-weight: 500;
+}
+.focus-option:has(input:checked) {
+  border-color: var(--accent); background: rgba(124,92,252,.1);
+}
+
+#zoomSlider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--accent); cursor: pointer;
+  border: 2px solid var(--bg);
+}
+#zoomSlider::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--accent);
+  cursor: pointer; border: 2px solid var(--bg);
+}
+#paddingSlider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--accent); cursor: pointer;
+  border: 2px solid var(--bg);
+}
+#paddingSlider::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--accent);
+  cursor: pointer; border: 2px solid var(--bg);
+}
 .mode-toggle {
   margin-left: auto;
   display: flex; align-items: center; gap: 6px;
@@ -459,6 +498,88 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 .center-info {
   position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,.7);
   padding: 6px 12px; border-radius: 6px; font-size: 12px;
+}
+
+/* ─── Mouse Position Matrix ─────── */
+.mouse-matrix-container {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+}
+.mouse-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.mouse-matrix-item {
+  position: relative;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  aspect-ratio: 16/9;
+}
+.mouse-matrix-item:hover {
+  border-color: var(--accent);
+  transform: scale(1.02);
+}
+.mouse-matrix-item.active {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(76,218,138,0.3);
+}
+.mouse-matrix-item.marked {
+  border-color: var(--orange);
+}
+.mouse-matrix-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.mouse-matrix-item .frame-number {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0,0,0,.8);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.mouse-matrix-item .mouse-position {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(252,92,124,.9);
+  color: white;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.mouse-matrix-item .center-mark {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--green);
+  border-radius: 50%;
+  background: rgba(76,218,138,.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.mouse-matrix-item .suggested-center {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 /* ─── Crop Preview ─────── */
@@ -624,7 +745,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
     </div>
 
     <div class="tools-bar" id="toolsSelect">
-      <button class="tool-btn danger" onclick="findDuplicates()" title="Znajdź klatki podobne >90%">
+      <button class="tool-btn danger" onclick="detectDuplicates()" title="Znajdź klatki podobne >90%">
         <span class="icon">🔍</span> Znajdź duplikaty <span class="badge-count" id="dupCount" style="display:none"></span>
       </button>
       <button class="tool-btn danger" id="btnRemoveDups" onclick="removeDuplicates()" style="display:none" title="Usuń oznaczone duplikaty">
@@ -638,6 +759,9 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
       </button>
       <button class="tool-btn" onclick="selectEveryNth()" title="Zaznacz co N-tą klatkę">
         <span class="icon">#️⃣</span> Co N-ta
+      </button>
+      <button class="tool-btn success" onclick="selectMostDifferent()" title="Zaznacz klatki z największymi zmianami">
+        <span class="icon">⚡</span> Największe zmiany
       </button>
       <div class="tools-divider"></div>
       <button class="tool-btn advanced" onclick="advancedSimilarity()" title="Zaawansowana analiza (wymaga dodatkowych pakietów)">
@@ -657,6 +781,61 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 
     <div class="missing-frames-banner" id="missingFramesBanner"></div>
     <div id="frameGrid" class="frame-grid"></div>
+
+    <!-- Focus Mode Preview for Select Tab -->
+    <div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+      <h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text)">🎯 Podgląd trybu focusu</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:16px">
+        <label class="focus-option">
+          <input type="radio" name="selectFocusMode" value="screen" checked onchange="updateSelectFocusMode('screen')">
+          <span>🖥️ Ekran</span>
+        </label>
+        <label class="focus-option">
+          <input type="radio" name="selectFocusMode" value="mouse" onchange="updateSelectFocusMode('mouse')">
+          <span>🖱️ Mysz</span>
+        </label>
+        <label class="focus-option">
+          <input type="radio" name="selectFocusMode" value="keyboard" onchange="updateSelectFocusMode('keyboard')">
+          <span>⌨️ Klawiatura</span>
+        </label>
+        <label class="focus-option">
+          <input type="radio" name="selectFocusMode" value="application" onchange="updateSelectFocusMode('application')">
+          <span>🪬 Aplikacja</span>
+        </label>
+      </div>
+      
+      <div id="selectZoomControls" style="display:none">
+        <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px">
+          🔍 Zoom myszy: <span id="selectZoomValue">2.0x</span>
+        </label>
+        <input type="range" id="selectZoomSlider" min="1" max="10" value="2" step="0.5" 
+               oninput="updateSelectZoom(this.value)"
+               style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
+          <span>1x</span><span>5x</span><span>10x</span>
+        </div>
+        
+        <label style="font-size:13px;color:var(--text2);display:block;margin:12px 0 8px 0">
+          📏 Obszar wokół myszy: <span id="selectPaddingValue">100px</span>
+        </label>
+        <input type="range" id="selectPaddingSlider" min="50" max="300" value="100" step="10" 
+               oninput="updateSelectPadding(this.value)"
+               style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
+          <span>50px</span><span>175px</span><span>300px</span>
+        </div>
+      </div>
+      
+      <div id="selectVideoPreviewContainer" style="margin-top:16px">
+        <h5 style="margin:0 0 8px 0;font-size:13px;color:var(--text)">🎬 Podgląd pierwszej zaznaczonej klatki</h5>
+        <div id="selectVideoPreview" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;min-height:120px;display:flex;align-items:center;justify-content:center;position:relative">
+          <div style="color:var(--text2);font-size:12px;text-align:center">
+            <div>⏳ Wybierz klatki aby zobaczyć podgląd</div>
+            <small style="display:block;margin-top:4px">Zmień tryb focusu aby zobaczyć różnicę</small>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="btn-group">
       <button class="btn btn-outline" onclick="selectAllFrames()">Zaznacz wszystkie</button>
@@ -750,6 +929,16 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         <div class="center-info" id="centerInfo">Kliknij na obrazie</div>
       </div>
     </div>
+    
+    <!-- Mouse Position Matrix -->
+    <div class="mouse-matrix-container" style="margin-top:20px">
+      <h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text)">🖱️ Pozycje myszy (matrix 3x3)</h4>
+      <div id="mouseMatrix" class="mouse-matrix">
+        <div style="grid-column:1/-1;text-align:center;color:var(--text2);font-size:12px;padding:8px">
+          ⏳ Ładowanie pozycji myszy...
+        </div>
+      </div>
+    </div>
     <div class="btn-group">
       <button class="btn btn-outline" onclick="navigateToTab('select')">← Wstecz</button>
       <button class="btn btn-outline" onclick="autoCenters()">Auto (kursor myszy)</button>
@@ -778,6 +967,63 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
       <button class="tool-btn advanced" onclick="advancedSmartCrop()" title="AI smart crop (wymaga opencv)">
         <span class="icon">🧠</span> AI smart crop
       </button>
+    </div>
+
+    <!-- Focus Mode Controls -->
+    <div class="focus-controls" style="margin-bottom:20px;padding:16px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+      <h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text)">🎯 Tryb focusu</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:16px">
+        <label class="focus-option">
+          <input type="radio" name="focusMode" value="screen" checked onchange="updateFocusMode('screen')">
+          <span>🖥️ Ekran</span>
+        </label>
+        <label class="focus-option">
+          <input type="radio" name="focusMode" value="mouse" onchange="updateFocusMode('mouse')">
+          <span>🖱️ Mysz</span>
+        </label>
+        <label class="focus-option">
+          <input type="radio" name="focusMode" value="keyboard" onchange="updateFocusMode('keyboard')">
+          <span>⌨️ Klawiatura</span>
+        </label>
+        <label class="focus-option">
+          <input type="radio" name="focusMode" value="application" onchange="updateFocusMode('application')">
+          <span>🪬 Aplikacja</span>
+        </label>
+      </div>
+      
+      <!-- Zoom Control -->
+      <div id="zoomControls" style="display:none">
+        <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px">
+          🔍 Zoom myszy: <span id="zoomValue">2.0x</span>
+        </label>
+        <input type="range" id="zoomSlider" min="1" max="10" value="2" step="0.5" 
+               oninput="updateZoom(this.value)"
+               style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
+          <span>1x</span><span>5x</span><span>10x</span>
+        </div>
+        
+        <label style="font-size:13px;color:var(--text2);display:block;margin:12px 0 8px 0">
+          📏 Obszar wokół myszy: <span id="paddingValue">100px</span>
+        </label>
+        <input type="range" id="paddingSlider" min="50" max="300" value="100" step="10" 
+               oninput="updatePadding(this.value)"
+               style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
+          <span>50px</span><span>175px</span><span>300px</span>
+        </div>
+      </div>
+      
+      <!-- Video Preview -->
+      <div id="videoPreviewContainer" style="margin-top:16px">
+        <h5 style="margin:0 0 8px 0;font-size:13px;color:var(--text)">🎬 Podgląd pierwszej klatki wideo</h5>
+        <div id="videoPreview" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;min-height:120px;display:flex;align-items:center;justify-content:center;position:relative">
+          <div style="color:var(--text2);font-size:12px;text-align:center">
+            <div>⏳ Generowanie podglądu...</div>
+            <small style="display:block;margin-top:4px">Zmień ustawienia aby zobaczyć efekt</small>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="preset-bar" id="presetBar"></div>
@@ -846,6 +1092,61 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
     </div>
 
     <div class="publish-section">
+      <!-- Focus Mode & Zoom Settings -->
+      <div style="margin-bottom:20px;padding:16px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+        <h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text)">🎯 Ustawienia focusu</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:16px">
+          <label class="focus-option">
+            <input type="radio" name="exportFocusMode" value="screen" checked onchange="updateExportFocusMode('screen')">
+            <span>🖥️ Ekran</span>
+          </label>
+          <label class="focus-option">
+            <input type="radio" name="exportFocusMode" value="mouse" onchange="updateExportFocusMode('mouse')">
+            <span>🖱️ Mysz</span>
+          </label>
+          <label class="focus-option">
+            <input type="radio" name="exportFocusMode" value="keyboard" onchange="updateExportFocusMode('keyboard')">
+            <span>⌨️ Klawiatura</span>
+          </label>
+          <label class="focus-option">
+            <input type="radio" name="exportFocusMode" value="application" onchange="updateExportFocusMode('application')">
+            <span>🪬 Aplikacja</span>
+          </label>
+        </div>
+        
+        <div id="exportZoomControls" style="display:none">
+          <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px">
+            🔍 Zoom myszy: <span id="exportZoomValue">2.0x</span>
+          </label>
+          <input type="range" id="exportZoomSlider" min="1" max="10" value="2" step="0.5" 
+                 oninput="updateExportZoom(this.value)"
+                 style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
+            <span>1x</span><span>5x</span><span>10x</span>
+          </div>
+          
+          <label style="font-size:13px;color:var(--text2);display:block;margin:12px 0 8px 0">
+            📏 Obszar wokół myszy: <span id="exportPaddingValue">100px</span>
+          </label>
+          <input type="range" id="exportPaddingSlider" min="50" max="300" value="100" step="10" 
+                 oninput="updateExportPadding(this.value)"
+                 style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
+            <span>50px</span><span>175px</span><span>300px</span>
+          </div>
+        </div>
+        
+        <!-- Export Video Preview -->
+        <div id="exportVideoPreviewContainer" style="margin-top:16px">
+          <h5 style="margin:0 0 8px 0;font-size:13px;color:var(--text)">🎬 Podgląd pierwszej klatki wideo</h5>
+          <div id="exportVideoPreview" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;min-height:120px;display:flex;align-items:center;justify-content:center;position:relative">
+            <div style="color:var(--text2);font-size:12px;text-align:center">
+              <div>⏳ Generowanie podglądu...</div>
+              <small style="display:block;margin-top:4px">Zmień ustawienia aby zobaczyć efekt</small>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="export-options">
         <div class="export-row">
           <label>Format:</label>
@@ -855,11 +1156,20 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         </div>
         <div class="export-row">
           <label>Czas/klatka:</label>
-          <input type="range" id="exportDuration" min="0.1" max="5" value="2" step="0.1" 
+          <input type="range" id="exportDuration" min="0.1" max="5" value="0.5" step="0.1" 
                  oninput="document.getElementById('durationValue').textContent = this.value + 's'">
-          <span id="durationValue" class="range-value">2s</span>
+          <span id="durationValue" class="range-value">0.5s</span>
           <div class="range-labels">
             <span>0.1s</span><span>2.5s</span><span>5s</span>
+          </div>
+        </div>
+        <div class="export-row">
+          <label>Jakość:</label>
+          <input type="range" id="exportQuality" min="10" max="100" value="70" step="5" 
+                 oninput="document.getElementById('qualityValue').textContent = this.value + '%'">
+          <span id="qualityValue" class="range-value">70%</span>
+          <div class="range-labels">
+            <span>Niska</span><span>Średnia</span><span>Wysoka</span>
           </div>
         </div>
         <div class="export-row" style="display:none;">
@@ -922,6 +1232,9 @@ let presets = {};
 let duplicateIndices = new Set();  // indices marked as duplicates
 let duplicatePairs = [];           // [{frame_a, frame_b, similarity}]
 let advancedModeOn = false;
+let currentFocusMode = 'screen';
+let currentZoomLevel = 2.0;
+let currentMousePadding = 100;
 
 // ─── URL Management ───────────────────────────────────────────────────────────
 function parseURL() {
@@ -1118,16 +1431,21 @@ function toggleFrame(idx, card) {
     card.classList.add('selected');
     card.querySelector('.check').textContent = '✓';
   }
+  
+  // Update select tab video preview when selection changes
+  updateSelectVideoPreview();
 }
 
 function selectAllFrames() {
   sessionData.frames.forEach((_, i) => selectedFrames.add(i));
   renderFrameGrid();
+  updateSelectVideoPreview();
 }
 
 function deselectAllFrames() {
   selectedFrames.clear();
   renderFrameGrid();
+  updateSelectVideoPreview();
 }
 
 // ─── Frame Trash ───────────────────────────────────────────────────────────────
@@ -1232,7 +1550,7 @@ async function saveSelection() {
 
 // ─── Tools: Tab 1 (Select) ──────────────────────────────────────────────────
 
-async function findDuplicates() {
+async function detectDuplicates() {
   if (!currentSession) return;
   toast('Szukam duplikatów...');
   try {
@@ -1300,6 +1618,40 @@ function selectEveryNth() {
   });
   renderFrameGrid();
   toast(`Zaznaczono co ${n}. klatkę — ${selectedFrames.size} zaznaczonych`);
+}
+
+function selectMostDifferent() {
+  if (!sessionData) return;
+  
+  // Sort frames by change_pct (descending)
+  const framesWithIndex = sessionData.frames.map((frame, index) => ({
+    index,
+    change_pct: frame.change_pct || 0
+  }));
+  
+  framesWithIndex.sort((a, b) => b.change_pct - a.change_pct);
+  
+  // Calculate threshold based on distribution
+  const changes = framesWithIndex.map(f => f.change_pct);
+  const avgChange = changes.reduce((a, b) => a + b, 0) / changes.length;
+  const maxChange = Math.max(...changes);
+  
+  // Select frames with change > average + 25% of (max - average)
+  // This captures the top ~25% most changing frames
+  const threshold = avgChange + (maxChange - avgChange) * 0.25;
+  
+  selectedFrames.clear();
+  framesWithIndex.forEach(frame => {
+    if (frame.change_pct >= threshold) {
+      selectedFrames.add(frame.index);
+    }
+  });
+  
+  // Always include first frame (usually important)
+  selectedFrames.add(0);
+  
+  renderFrameGrid();
+  toast(`Zaznaczono ${selectedFrames.size} klatek z największymi zmianami (>${threshold.toFixed(1)}%)`);
 }
 
 // ─── Tab 2: Annotations ─────────────────────────────────────────────────────
@@ -1539,6 +1891,291 @@ function copyCenterToAll() {
   toast(`Skopiowano środek (${current.x}, ${current.y}) do ${selectedFrames.size} klatek`);
 }
 
+// ─── Select Tab Focus Mode Functions ───────────────────────────────────────
+function updateSelectFocusMode(mode) {
+  currentFocusMode = mode;
+  const zoomControls = document.getElementById('selectZoomControls');
+  zoomControls.style.display = mode === 'mouse' ? 'block' : 'none';
+  
+  // Sync with other tabs
+  document.querySelector('input[name="focusMode"][value="' + mode + '"]').checked = true;
+  document.querySelector('input[name="exportFocusMode"][value="' + mode + '"]').checked = true;
+  
+  // Update video preview
+  updateSelectVideoPreview();
+  
+  toast(`Tryb focusu: ${mode === 'screen' ? 'Ekran' : mode === 'mouse' ? 'Mysz' : mode === 'keyboard' ? 'Klawiatura' : 'Aplikacja'}`);
+}
+
+function updateSelectZoom(value) {
+  currentZoomLevel = parseFloat(value);
+  document.getElementById('selectZoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
+  
+  // Sync with other tabs
+  document.getElementById('zoomSlider').value = value;
+  document.getElementById('zoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
+  document.getElementById('exportZoomSlider').value = value;
+  document.getElementById('exportZoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
+  
+  // Update video preview
+  updateSelectVideoPreview();
+}
+
+function updateSelectPadding(value) {
+  currentMousePadding = parseInt(value);
+  document.getElementById('selectPaddingValue').textContent = currentMousePadding + 'px';
+  
+  // Sync with other tabs
+  document.getElementById('paddingSlider').value = value;
+  document.getElementById('paddingValue').textContent = currentMousePadding + 'px';
+  document.getElementById('exportPaddingSlider').value = value;
+  document.getElementById('exportPaddingValue').textContent = currentMousePadding + 'px';
+  
+  // Update video preview
+  updateSelectVideoPreview();
+}
+
+function updateSelectVideoPreview() {
+  // Clear previous timeout
+  if (videoPreviewTimeout) {
+    clearTimeout(videoPreviewTimeout);
+  }
+  
+  // Debounce preview generation
+  videoPreviewTimeout = setTimeout(() => {
+    generateSelectVideoPreview();
+  }, 500);
+}
+
+async function generateSelectVideoPreview() {
+  if (!currentSession || !sessionData) return;
+  
+  const previewEl = document.getElementById('selectVideoPreview');
+  if (!previewEl) return;
+  
+  // Check if any frames are selected
+  if (selectedFrames.size === 0) {
+    previewEl.innerHTML = `
+      <div style="color:var(--text2);font-size:12px;text-align:center">
+        <div>⏳ Wybierz klatki aby zobaczyć podgląd</div>
+        <small style="display:block;margin-top:4px">Zaznacz klatki klikając na nie</small>
+      </div>
+    `;
+    return;
+  }
+  
+  // Show loading state
+  previewEl.innerHTML = `
+    <div style="color:var(--text2);font-size:12px;text-align:center">
+      <div class="spinner" style="margin:0 auto 8px auto"></div>
+      <div>Generowanie podglądu...</div>
+      <small style="display:block;margin-top:4px">${currentFocusMode === 'mouse' ? `Zoom ${currentZoomLevel}x • obszar ${currentMousePadding}px` : currentFocusMode}</small>
+    </div>
+  `;
+  
+  try {
+    const result = await api(`/sessions/${currentSession}/video-preview`, {
+      method: 'POST',
+      body: {
+        preset: activePreset,
+        frame_indices: [...selectedFrames].sort(),
+        focus_mode: currentFocusMode,
+        zoom_level: currentZoomLevel,
+        mouse_padding: currentMousePadding,
+      },
+    });
+    
+    const focusIcon = result.focus_mode === 'mouse' ? '🖱️' : 
+                      result.focus_mode === 'keyboard' ? '⌨️' : 
+                      result.focus_mode === 'application' ? '🪬' : '🖥️';
+    
+    previewEl.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%">
+        <img src="${result.preview_url}" style="max-width:100%;max-height:200px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+        <div style="font-size:11px;color:var(--text2);text-align:center;line-height:1.4">
+          <div><strong>Klatka #${result.frame_index + 1}</strong> • ${focusIcon} ${result.focus_mode}</div>
+          ${result.focus_mode === 'mouse' ? `<div>Zoom ${result.zoom_level}x • obszar ${currentMousePadding}px</div>` : ''}
+          <div>Wycięto: ${result.crop.w}×${result.crop.h}px → ${result.target.w}×${result.target.h}px</div>
+          <div>Środek: (${result.center.x}, ${result.center.y})</div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    previewEl.innerHTML = `
+      <div style="color:var(--red);font-size:12px;text-align:center">
+        <div>❌ Błąd generowania podglądu</div>
+        <small style="display:block;margin-top:4px">${e.message}</small>
+      </div>
+    `;
+  }
+}
+
+// ─── Export Focus Mode Functions ───────────────────────────────────────────
+function updateExportFocusMode(mode) {
+  currentFocusMode = mode;
+  const zoomControls = document.getElementById('exportZoomControls');
+  zoomControls.style.display = mode === 'mouse' ? 'block' : 'none';
+  
+  // Sync with crop tab
+  document.querySelector('input[name="focusMode"][value="' + mode + '"]').checked = true;
+  
+  // Update video preview
+  updateVideoPreview();
+  
+  toast(`Tryb focusu eksportu: ${mode === 'screen' ? 'Ekran' : mode === 'mouse' ? 'Mysz' : mode === 'keyboard' ? 'Klawiatura' : 'Aplikacja'}`);
+}
+
+function updateExportZoom(value) {
+  currentZoomLevel = parseFloat(value);
+  document.getElementById('exportZoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
+  
+  // Sync with crop tab
+  document.getElementById('zoomSlider').value = value;
+  document.getElementById('zoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
+  
+  // Update video preview
+  updateVideoPreview();
+}
+
+function updateExportPadding(value) {
+  currentMousePadding = parseInt(value);
+  document.getElementById('exportPaddingValue').textContent = currentMousePadding + 'px';
+  
+  // Sync with crop tab
+  document.getElementById('paddingSlider').value = value;
+  document.getElementById('paddingValue').textContent = currentMousePadding + 'px';
+  
+  // Update video preview
+  updateVideoPreview();
+}
+
+// ─── Video Preview Functions ───────────────────────────────────────────
+let videoPreviewTimeout = null;
+
+function updateVideoPreview() {
+  // Clear previous timeout
+  if (videoPreviewTimeout) {
+    clearTimeout(videoPreviewTimeout);
+  }
+  
+  // Debounce preview generation
+  videoPreviewTimeout = setTimeout(() => {
+    generateVideoPreview('crop');
+    generateVideoPreview('export');
+  }, 500);
+}
+
+async function generateVideoPreview(context) {
+  if (!currentSession || !sessionData) return;
+  
+  const previewId = context === 'crop' ? 'videoPreview' : 'exportVideoPreview';
+  const previewEl = document.getElementById(previewId);
+  
+  if (!previewEl) return;
+  
+  // Show loading state
+  previewEl.innerHTML = `
+    <div style="color:var(--text2);font-size:12px;text-align:center">
+      <div class="spinner" style="margin:0 auto 8px auto"></div>
+      <div>Generowanie podglądu...</div>
+      <small style="display:block;margin-top:4px">${currentFocusMode === 'mouse' ? `Zoom ${currentZoomLevel}x • obszar ${currentMousePadding}px` : currentFocusMode}</small>
+    </div>
+  `;
+  
+  try {
+    const result = await api(`/sessions/${currentSession}/video-preview`, {
+      method: 'POST',
+      body: {
+        preset: activePreset,
+        frame_indices: [...selectedFrames].sort(),
+        focus_mode: currentFocusMode,
+        zoom_level: currentZoomLevel,
+        mouse_padding: currentMousePadding,
+      },
+    });
+    
+    const focusIcon = result.focus_mode === 'mouse' ? '🖱️' : 
+                      result.focus_mode === 'keyboard' ? '⌨️' : 
+                      result.focus_mode === 'application' ? '🪬' : '🖥️';
+    
+    previewEl.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%">
+        <img src="${result.preview_url}" style="max-width:100%;max-height:200px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+        <div style="font-size:11px;color:var(--text2);text-align:center;line-height:1.4">
+          <div><strong>Klatka #${result.frame_index + 1}</strong> • ${focusIcon} ${result.focus_mode}</div>
+          ${result.focus_mode === 'mouse' ? `<div>Zoom ${result.zoom_level}x • obszar ${currentMousePadding}px</div>` : ''}
+          <div>Wycięto: ${result.crop.w}×${result.crop.h}px → ${result.target.w}×${result.target.h}px</div>
+          <div>Środek: (${result.center.x}, ${result.center.y})</div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    previewEl.innerHTML = `
+      <div style="color:var(--red);font-size:12px;text-align:center">
+        <div>❌ Błąd generowania podglądu</div>
+        <small style="display:block;margin-top:4px">${e.message}</small>
+      </div>
+    `;
+  }
+}
+
+// ─── Focus Mode & Zoom Functions ───────────────────────────────────────────
+function updateFocusMode(mode) {
+  currentFocusMode = mode;
+  const zoomControls = document.getElementById('zoomControls');
+  zoomControls.style.display = mode === 'mouse' ? 'block' : 'none';
+  
+  // Sync with export tab
+  document.querySelector('input[name="exportFocusMode"][value="' + mode + '"]').checked = true;
+  
+  // Auto-refresh crop preview if on crop tab
+  const cropPanel = document.getElementById('panel-crop');
+  if (cropPanel && cropPanel.classList.contains('active')) {
+    loadCropPreview();
+  }
+  
+  // Update video preview
+  updateVideoPreview();
+  
+  toast(`Tryb focusu: ${mode === 'screen' ? 'Ekran' : mode === 'mouse' ? 'Mysz' : mode === 'keyboard' ? 'Klawiatura' : 'Aplikacja'}`);
+}
+
+function updateZoom(value) {
+  currentZoomLevel = parseFloat(value);
+  document.getElementById('zoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
+  
+  // Sync with export tab
+  document.getElementById('exportZoomSlider').value = value;
+  document.getElementById('exportZoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
+  
+  // Auto-refresh crop preview
+  const cropPanel = document.getElementById('panel-crop');
+  if (cropPanel && cropPanel.classList.contains('active')) {
+    loadCropPreview();
+  }
+  
+  // Update video preview
+  updateVideoPreview();
+}
+
+function updatePadding(value) {
+  currentMousePadding = parseInt(value);
+  document.getElementById('paddingValue').textContent = currentMousePadding + 'px';
+  
+  // Sync with export tab
+  document.getElementById('exportPaddingSlider').value = value;
+  document.getElementById('exportPaddingValue').textContent = currentMousePadding + 'px';
+  
+  // Auto-refresh crop preview
+  const cropPanel = document.getElementById('panel-crop');
+  if (cropPanel && cropPanel.classList.contains('active')) {
+    loadCropPreview();
+  }
+  
+  // Update video preview
+  updateVideoPreview();
+}
+
 // ─── Tools: Tab 3 (Crop) ────────────────────────────────────────────────────
 
 function previewAllPresets() {
@@ -1607,6 +2244,65 @@ function advancedVideoExport() {
 document.addEventListener('DOMContentLoaded', () => {
   toggleAdvancedMode(false);
 });
+
+// ─── Mouse Position Matrix ─────────────────────────────────────────────
+function renderMouseMatrix() {
+  if (!sessionData) return;
+  
+  const matrix = document.getElementById('mouseMatrix');
+  const selected = [...selectedFrames].sort();
+  
+  if (selected.length === 0) {
+    matrix.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text2);font-size:12px;padding:16px">Brak zaznaczonych klatek</div>';
+    return;
+  }
+  
+  matrix.innerHTML = '';
+  
+  selected.forEach((frameIdx, i) => {
+    if (i >= 9) return; // Max 9 frames in 3x3 grid
+    
+    const frame = sessionData.frames[frameIdx];
+    if (!frame) return;
+    
+    const item = document.createElement('div');
+    item.className = 'mouse-matrix-item';
+    if (frameIdx === currentCenterFrame) item.classList.add('active');
+    if (centerMarks[frameIdx]) item.classList.add('marked');
+    
+    item.onclick = () => showCenterFrame(frameIdx);
+    
+    // Calculate positions for visual markers
+    const centerX = centerMarks[frameIdx]?.x || frame.suggested_center_x || frame.width / 2;
+    const centerY = centerMarks[frameIdx]?.y || frame.suggested_center_y || frame.height / 2;
+    const mouseX = frame.mouse_x || frame.width / 2;
+    const mouseY = frame.mouse_y || frame.height / 2;
+    
+    // Convert to percentages for positioning
+    const centerXPct = (centerX / frame.width) * 100;
+    const centerYPct = (centerY / frame.height) * 100;
+    const mouseXPct = (mouseX / frame.width) * 100;
+    const mouseYPct = (mouseY / frame.height) * 100;
+    
+    item.innerHTML = `
+      <img src="/api/sessions/${currentSession}/frames/${frame.filename}" loading="lazy">
+      <div class="frame-number">#${frameIdx + 1}</div>
+      <div class="mouse-position">🖱️ ${Math.round(mouseX)},${Math.round(mouseY)}</div>
+      ${centerMarks[frameIdx] ? `<div class="center-mark" style="left:${centerXPct}%;top:${centerYPct}%"></div>` : ''}
+      <div class="suggested-center" style="left:${(frame.suggested_center_x / frame.width) * 100}%;top:${(frame.suggested_center_y / frame.height) * 100}%"></div>
+    `;
+    
+    matrix.appendChild(item);
+  });
+  
+  // If more than 9 frames, show indicator
+  if (selected.length > 9) {
+    const more = document.createElement('div');
+    more.style.cssText = 'grid-column:1/-1;text-align:center;color:var(--text2);font-size:11px;padding:8px';
+    more.textContent = `... i ${selected.length - 9} więcej klatek`;
+    matrix.appendChild(more);
+  }
+}
 
 // ─── Tab 2: Center Marking ──────────────────────────────────────────────────
 function setupCenterCanvas() {
@@ -1713,6 +2409,9 @@ function renderCenterPanel() {
   });
 
   if (selected.length > 0) showCenterFrame(selected[0]);
+  
+  // Render mouse position matrix
+  renderMouseMatrix();
 }
 
 function showCenterFrame(idx) {
@@ -1735,6 +2434,11 @@ function showCenterFrame(idx) {
   const thumbIdx = selected.indexOf(idx);
   if (thumbIdx >= 0 && thumbs[thumbIdx]) thumbs[thumbIdx].classList.add('active');
 
+  // Update matrix active state
+  document.querySelectorAll('.mouse-matrix-item').forEach(item => item.classList.remove('active'));
+  const matrixItems = document.querySelectorAll('.mouse-matrix-item');
+  if (matrixItems[thumbIdx]) matrixItems[thumbIdx].classList.add('active');
+
   document.getElementById('centerInfo').textContent =
     centerMarks[idx]
       ? `Środek: (${center.x}, ${center.y})`
@@ -1753,6 +2457,14 @@ function setCenter(idx, x, y) {
   if (thumbIdx >= 0 && thumbs[thumbIdx]) {
     thumbs[thumbIdx].classList.add('marked');
     thumbs[thumbIdx].querySelector('.idx').textContent = `#${idx+1} ✓`;
+  }
+
+  // Update matrix
+  const matrixItems = document.querySelectorAll('.mouse-matrix-item');
+  if (matrixItems[thumbIdx]) {
+    matrixItems[thumbIdx].classList.add('marked');
+    // Re-render the specific matrix item to show the new center mark
+    renderMouseMatrix();
   }
 
   toast(`Środek klatki #${idx+1}: (${x}, ${y})`);
@@ -1783,6 +2495,7 @@ function autoCenters() {
     }
   });
   renderCenterPanel();
+  renderMouseMatrix();
   toast('Auto-środki ustawione na pozycji kursora');
 }
 
@@ -1840,6 +2553,9 @@ async function loadCropPreview() {
     body: {
       preset: activePreset,
       frame_indices: [...selectedFrames].sort(),
+      focus_mode: currentFocusMode,
+      zoom_level: currentZoomLevel,
+      mouse_padding: currentMousePadding,
     },
   });
 
@@ -1847,10 +2563,16 @@ async function loadCropPreview() {
   result.previews.forEach(p => {
     const card = document.createElement('div');
     card.className = 'crop-card';
+    
+    const focusIcon = p.focus_mode === 'mouse' ? '🖱️' : 
+                      p.focus_mode === 'keyboard' ? '⌨️' : 
+                      p.focus_mode === 'application' ? '🪬' : '🖥️';
+    
     card.innerHTML = `
       <img src="/api/sessions/${currentSession}/preview/${p.filename}" loading="lazy">
       <div class="info">
-        Klatka #${p.index+1} • środek: (${p.center.x}, ${p.center.y}) • ${p.target.w}×${p.target.h}
+        Klatka #${p.index+1} • ${focusIcon} ${p.focus_mode} • zoom: ${p.zoom_level}x<br>
+        środek: (${p.center.x}, ${p.center.y}) • ${p.target.w}×${p.target.h}
       </div>
     `;
     grid.appendChild(card);
@@ -1922,7 +2644,11 @@ async function exportFormat(format) {
         format: format,
         duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
         fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
+        quality: parseInt(document.getElementById('exportQuality').value),
         frame_indices: [...selectedFrames].sort(),
+        focus_mode: currentFocusMode,
+        zoom_level: currentZoomLevel,
+        mouse_padding: currentMousePadding,
       },
     });
 
@@ -1990,7 +2716,11 @@ async function exportAllFormats() {
           format: format,
           duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
           fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
+          quality: parseInt(document.getElementById('exportQuality').value),
           frame_indices: [...selectedFrames].sort(),
+          focus_mode: currentFocusMode,
+          zoom_level: currentZoomLevel,
+          mouse_padding: currentMousePadding,
         },
       }).then(result => ({ format, result }))
       .catch(error => ({ format, error }))
@@ -2103,9 +2833,20 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
 
   // Lazy load tab content
+  if (name === 'select') {
+    renderFrameGrid();
+    // Auto-detect duplicates when switching to select tab
+    if (sessionData && sessionData.frame_count > 1) {
+      detectDuplicates();
+    }
+  }
   if (name === 'annotate') renderAnnotatePanel();
   if (name === 'center') renderCenterPanel();
-  if (name === 'crop') loadCropPreview();
+  if (name === 'crop') {
+    loadCropPreview();
+    // Generate video preview when switching to crop tab
+    setTimeout(() => updateVideoPreview(), 100);
+  }
 }
 
 // Update tab click handlers to use navigation
