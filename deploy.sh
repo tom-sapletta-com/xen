@@ -1,12 +1,12 @@
 #!/bin/bash
-# xen — deploy na VPS z TLS
+# xeen — deploy na VPS z TLS
 # Użycie: ./deploy.sh twoja-domena.pl
 
 set -euo pipefail
 
 DOMAIN="${1:?Użycie: ./deploy.sh twoja-domena.pl}"
 
-echo "🚀 xen deploy → ${DOMAIN}"
+echo "🚀 xeen deploy → ${DOMAIN}"
 
 # 1. Prereqs
 echo "📦 Instalacja zależności..."
@@ -48,7 +48,7 @@ docker-compose build --quiet
 docker-compose up -d
 
 echo ""
-echo "✅ xen działa!"
+echo "✅ xeen działa!"
 echo "   https://${DOMAIN}"
 echo ""
 echo "   Logi:    docker-compose logs -f"

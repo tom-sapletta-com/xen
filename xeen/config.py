@@ -5,12 +5,12 @@ from pathlib import Path
 
 
 def get_data_dir() -> Path:
-    """Zwróć katalog danych xen."""
-    env = os.environ.get("XEN_DATA_DIR")
+    """Zwróć katalog danych xeen."""
+    env = os.environ.get("XEEN_DATA_DIR")
     if env:
         p = Path(env)
     else:
-        p = Path.home() / ".xen"
+        p = Path.home() / ".xeen"
     p.mkdir(parents=True, exist_ok=True)
     (p / "sessions").mkdir(exist_ok=True)
     (p / "exports").mkdir(exist_ok=True)

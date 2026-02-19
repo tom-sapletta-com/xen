@@ -9,10 +9,10 @@ dev:
 
 # Użycie
 capture:
-	xen capture
+	xeen capture
 
 server:
-	xen server
+	xeen server
 
 # Docker
 docker:

@@ -1,4 +1,4 @@
-"""CLI entry point for xen."""
+"""CLI entry point for xeen."""
 
 import argparse
 import os
@@ -10,12 +10,12 @@ import time
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="xen",
-        description="📹 xen — Screenshot capture → edit → crop → publish",
+        prog="xeen",
+        description="📹 xeen — Screenshot capture → edit → crop → publish",
     )
     sub = parser.add_subparsers(dest="command", help="Dostępne komendy")
 
-    # xen capture
+    # xeen capture
     cap = sub.add_parser("capture", aliases=["c"], help="Rozpocznij nagrywanie ekranu")
     cap.add_argument("-d", "--duration", type=float, default=10.0,
                      help="Maks. czas nagrywania w sekundach (domyślnie: 10)")
@@ -30,15 +30,15 @@ def main():
     cap.add_argument("--monitor", type=int, default=0,
                      help="Numer monitora (0=wszystkie, 1=pierwszy, ...)")
 
-    # xen server / xen (domyślnie)
+    # xeen server / xeen (domyślnie)
     srv = sub.add_parser("server", aliases=["s"], help="Uruchom serwer edycji")
     srv.add_argument("-p", "--port", type=int, default=7600, help="Port (domyślnie: 7600)")
     srv.add_argument("--host", type=str, default="127.0.0.1", help="Host (domyślnie: 127.0.0.1)")
     srv.add_argument("--no-browser", action="store_true", help="Nie otwieraj przeglądarki")
     srv.add_argument("--data-dir", type=str, default=None,
-                     help="Katalog danych (domyślnie: ~/.xen)")
+                     help="Katalog danych (domyślnie: ~/.xeen)")
 
-    # xen list
+    # xeen list
     sub.add_parser("list", aliases=["l"], help="Lista sesji nagrywania")
 
     args = parser.parse_args()
@@ -63,7 +63,7 @@ def main():
 
 def run_capture(args):
     """Uruchom sesję nagrywania."""
-    from xen.capture import CaptureSession
+    from xeen.capture import CaptureSession
 
     session = CaptureSession(
         duration=args.duration,
@@ -74,7 +74,7 @@ def run_capture(args):
         monitor=args.monitor,
     )
 
-    print(f"📹 xen capture")
+    print(f"📹 xeen capture")
     print(f"   Czas: {args.duration}s | Interwał: {args.interval}s | Monitor: {args.monitor}")
     print(f"   Naciśnij Ctrl+C aby zakończyć wcześniej\n")
 
@@ -88,16 +88,16 @@ def run_capture(args):
     print(f"\n✅ Sesja: {summary['name']}")
     print(f"   📸 {summary['frame_count']} klatek | {summary['duration']:.1f}s")
     print(f"   📁 {summary['path']}")
-    print(f"\n   Uruchom 'xen' aby edytować w przeglądarce")
+    print(f"\n   Uruchom 'xeen' aby edytować w przeglądarce")
 
 
 def run_server(args):
     """Uruchom serwer WWW."""
     import uvicorn
-    from xen.config import get_data_dir
+    from xeen.config import get_data_dir
 
     data_dir = args.data_dir or get_data_dir()
-    os.environ["XEN_DATA_DIR"] = str(data_dir)
+    os.environ["XEEN_DATA_DIR"] = str(data_dir)
 
     url = f"http://{args.host}:{args.port}"
 
@@ -107,11 +107,11 @@ def run_server(args):
             webbrowser.open(url)
         threading.Thread(target=open_browser, daemon=True).start()
 
-    print(f"📹 xen server → {url}")
+    print(f"📹 xeen server → {url}")
     print(f"   Dane: {data_dir}\n")
 
     uvicorn.run(
-        "xen.server:app",
+        "xeen.server:app",
         host=args.host,
         port=args.port,
         log_level="warning",
@@ -120,13 +120,13 @@ def run_server(args):
 
 def run_list(args):
     """Pokaż listę sesji."""
-    from xen.config import get_data_dir
+    from xeen.config import get_data_dir
     from pathlib import Path
     import json
 
     data_dir = get_data_dir() / "sessions"
     if not data_dir.exists():
-        print("Brak sesji. Uruchom 'xen capture' aby rozpocząć nagrywanie.")
+        print("Brak sesji. Uruchom 'xeen capture' aby rozpocząć nagrywanie.")
         return
 
     sessions = sorted(data_dir.iterdir(), reverse=True)

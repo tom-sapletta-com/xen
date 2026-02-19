@@ -17,7 +17,7 @@ Ale Canva to za dużo kroków. `xeen` robi to w terminalu + przeglądarce.
 ```
 ┌─────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
 │ Capture │ ──→ │  Select  │ ──→ │  Center  │ ──→ │   Crop   │ ──→ │ Publish  │
-│ xeen c   │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
+│ xeen c  │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
 └─────────┘     └──────────┘     └──────────┘     └──────────┘     └──────────┘
  screenshoty     wybór klatek     środek uwagi     przycinanie       eksport
  + metadane      grid view        click = center   presety SM        MP4/GIF/ZIP
@@ -146,7 +146,7 @@ docker-compose down
 
 ```
 ┌─────────────┐     ┌───────────┐
-│   nginx     │────→│  xeen app  │
+│   nginx     │────→│  xeen app │
 │  :80/:443   │     │   :7600   │
 │  TLS term.  │     │  FastAPI  │
 └─────────────┘     └───────────┘

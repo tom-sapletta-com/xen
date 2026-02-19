@@ -1,3 +1,36 @@
+## [0.1.7] - 2026-02-19
+
+### Summary
+
+feat(goal): CLI interface improvements
+
+### Docs
+
+- docs: update README
+
+### Build
+
+- update pyproject.toml
+
+### Config
+
+- config: update goal.yaml
+
+### Other
+
+- build: update Makefile
+- scripts: update deploy.sh
+- update xeen/__init__.py
+- update xeen/__main__.py
+- update xeen/capture.py
+- update xeen/cli.py
+- update xeen/config.py
+- update xeen/server.py
+- update xeen/static/style.css
+- update xeen/templates/index.html
+- ... and 2 more
+
+
 ## [0.1.6] - 2026-02-19
 
 ### Summary
