@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xeen"
-version = "0.1.5"
-description = "Screenshot capture → edit → crop → publish. One command: xen"
+version = "0.1.6"
+description = "Screenshot capture → edit → crop → publish. One command: xeen"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -45,17 +45,17 @@ dev = [
 ]
 
 [project.scripts]
-xen-capture = "xen.cli:main"
+xeen-capture = "xeen.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/softreck/xen-capture"
-Repository = "https://github.com/softreck/xen-capture"
+Homepage = "https://github.com/softreck/xeen-capture"
+Repository = "https://github.com/softreck/xeen-capture"
 
 [tool.setuptools.packages.find]
-include = ["xen*"]
+include = ["xeen*"]
 
 [tool.setuptools.package-data]
-xen = ["static/**/*", "templates/**/*"]
+xeen = ["static/**/*", "templates/**/*"]
 
 [tool.ruff]
 line-length = 100

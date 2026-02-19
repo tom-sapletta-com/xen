@@ -1,23 +1,23 @@
-# xen
+# xeen
 
 Screenshot capture → edit → crop → publish. One command.
 
 ```
 pip install -e .
-xen
+xeen
 ```
 
 ## Problem
 
 Chcesz szybko stworzyć krótki film ze screenshotów — demo produktu, tutorial, changelog.
-Ale Canva to za dużo kroków. `xen` robi to w terminalu + przeglądarce.
+Ale Canva to za dużo kroków. `xeen` robi to w terminalu + przeglądarce.
 
 ## Jak działa
 
 ```
 ┌─────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
 │ Capture │ ──→ │  Select  │ ──→ │  Center  │ ──→ │   Crop   │ ──→ │ Publish  │
-│ xen c   │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
+│ xeen c   │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
 └─────────┘     └──────────┘     └──────────┘     └──────────┘     └──────────┘
  screenshoty     wybór klatek     środek uwagi     przycinanie       eksport
  + metadane      grid view        click = center   presety SM        MP4/GIF/ZIP
@@ -28,8 +28,8 @@ Ale Canva to za dużo kroków. `xen` robi to w terminalu + przeglądarce.
 
 ```bash
 # Z repozytorium
-git clone https://github.com/softreck/xen.git
-cd xen
+git clone https://github.com/softreck/xeen.git
+cd xeen
 pip install -e .
 
 # Wymagania systemowe
@@ -44,22 +44,22 @@ brew install ffmpeg        # macOS
 
 ```bash
 # Domyślne (10s, co 1s, max 15 klatek)
-xen capture
+xeen capture
 
 # Krótkie demo (5s)
-xen capture -d 5
+xeen capture -d 5
 
 # Gęstsze klatki
-xen capture -d 10 -i 0.5
+xeen capture -d 10 -i 0.5
 
 # Nazwana sesja
-xen capture -n "ksefin-demo-v2"
+xeen capture -n "ksefin-demo-v2"
 
 # Konkretny monitor
-xen capture --monitor 1
+xeen capture --monitor 1
 ```
 
-Co zbiera `xen capture`:
+Co zbiera `xeen capture`:
 - **Screenshoty** z inteligentnym interwałem (pomija identyczne klatki)
 - **Pozycja myszy** co 100ms — używana jako sugestia "środka uwagi"
 - **Klawisze** — log co zostało wciśnięte (kontekst)
@@ -69,11 +69,11 @@ Co zbiera `xen capture`:
 
 ```bash
 # Uruchom serwer (otwiera przeglądarkę)
-xen
+xeen
 
 # Lub jawnie
-xen server -p 8080
-xen server --no-browser
+xeen server -p 8080
+xeen server --no-browser
 ```
 
 **5 zakładek:**
@@ -88,12 +88,12 @@ xen server --no-browser
 
 ### 3. Upload zewnętrznych screenshotów
 
-Możesz też przeciągnąć pliki PNG/JPG bezpośrednio do przeglądarki (Tab 1) — bez `xen capture`.
+Możesz też przeciągnąć pliki PNG/JPG bezpośrednio do przeglądarki (Tab 1) — bez `xeen capture`.
 
 ### 4. Lista sesji
 
 ```bash
-xen list
+xeen list
 ```
 
 ## Presety przycinania
@@ -112,14 +112,14 @@ xen list
 
 ```bash
 # 1. Sklonuj na VPS
-git clone https://github.com/softreck/xen.git
-cd xen
+git clone https://github.com/softreck/xeen.git
+cd xeen
 
 # 2. Deploy z domeną
-make deploy DOMAIN=xen.twoja-domena.pl
+make deploy DOMAIN=xeen.twoja-domena.pl
 
 # Lub ręcznie:
-bash deploy.sh xen.twoja-domena.pl
+bash deploy.sh xeen.twoja-domena.pl
 ```
 
 Skrypt automatycznie:
@@ -146,7 +146,7 @@ docker-compose down
 
 ```
 ┌─────────────┐     ┌───────────┐
-│   nginx     │────→│  xen app  │
+│   nginx     │────→│  xeen app  │
 │  :80/:443   │     │   :7600   │
 │  TLS term.  │     │  FastAPI  │
 └─────────────┘     └───────────┘
