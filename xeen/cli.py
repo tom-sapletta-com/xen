@@ -43,13 +43,15 @@ def main():
 
     args = parser.parse_args()
 
-    # Domyślnie uruchom serwer
+    # Domyślnie uruchom capture
     if args.command is None:
-        args.command = "server"
-        args.port = 7600
-        args.host = "127.0.0.1"
-        args.no_browser = False
-        args.data_dir = None
+        args.command = "capture"
+        args.duration = 10.0
+        args.interval = 1.0
+        args.min_interval = 0.5
+        args.threshold = 5.0
+        args.name = None
+        args.monitor = 0
 
     if args.command in ("capture", "c"):
         run_capture(args)

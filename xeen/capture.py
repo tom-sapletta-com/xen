@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, asdict
 import numpy as np
 from PIL import Image
 
-from xen.config import get_data_dir
+from xeen.config import get_data_dir
 
 
 @dataclass

@@ -17,7 +17,7 @@ Ale Canva to za dużo kroków. `xeen` robi to w terminalu + przeglądarce.
 ```
 ┌─────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
 │ Capture │ ──→ │  Select  │ ──→ │  Center  │ ──→ │   Crop   │ ──→ │ Publish  │
-│ xeen c  │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
+│ xeen    │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
 └─────────┘     └──────────┘     └──────────┘     └──────────┘     └──────────┘
  screenshoty     wybór klatek     środek uwagi     przycinanie       eksport
  + metadane      grid view        click = center   presety SM        MP4/GIF/ZIP
@@ -43,7 +43,10 @@ brew install ffmpeg        # macOS
 ### 1. Nagrywanie
 
 ```bash
-# Domyślne (10s, co 1s, max 15 klatek)
+# Domyślne (10s, co 1s, max 15 klatek) - komenda 'xeen' sama robi capture
+xeen
+
+# Lub jawnie
 xeen capture
 
 # Krótkie demo (5s)

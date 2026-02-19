@@ -1,3 +1,20 @@
+## [0.1.8] - 2026-02-19
+
+### Summary
+
+feat(docs): CLI interface improvements
+
+### Docs
+
+- docs: update README
+
+### Other
+
+- update xeen/capture.py
+- update xeen/cli.py
+- update xeen/server.py
+
+
 ## [0.1.7] - 2026-02-19
 
 ### Summary

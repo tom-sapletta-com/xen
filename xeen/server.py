@@ -1,4 +1,4 @@
-"""FastAPI server for xen web editor."""
+"""FastAPI server for xeen web editor."""
 
 import json
 import io
@@ -13,9 +13,9 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from xen.config import get_data_dir, CROP_PRESETS, SOCIAL_LINKS
+from xeen.config import get_data_dir, CROP_PRESETS, SOCIAL_LINKS
 
-app = FastAPI(title="xen", version="0.1.0")
+app = FastAPI(title="xeen", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
