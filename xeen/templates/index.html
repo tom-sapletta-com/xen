@@ -352,7 +352,9 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
   min-height: 200px;
 }
 .preview-media {
-  max-width: 100%; max-height: 200px;
+  width: 100%; height: 100%;
+  max-height: 200px;
+  object-fit: contain;
   border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 .preview-icon {
@@ -605,18 +607,102 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 .crop-card img { width: 100%; display: block; }
 .crop-card .info { padding: 8px; font-size: 11px; color: var(--text2); }
 
-/* ─── Versions ─────── */
-.versions-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+/* ─── Captions / Napisy ─────── */
+.captions-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 20px;
+  height: calc(100vh - 280px);
+  min-height: 500px;
 }
-.version-group {
+.captions-timeline {
+  display: flex; flex-direction: column; gap: 0; overflow-y: auto;
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.caption-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 80px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+.caption-row:hover { background: var(--surface2); }
+.caption-row.active { background: rgba(124,92,252,.15); border-left: 3px solid var(--accent); }
+.caption-row .cap-thumb {
+  width: 50px; height: 32px; object-fit: cover;
+  border-radius: 4px; background: var(--bg);
+  border: 1px solid var(--border);
+}
+.caption-row .cap-text {
+  font-size: 12px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.caption-row .cap-frames {
+  font-size: 10px; color: var(--text2); text-align: right;
+}
+.caption-row .cap-del {
+  position: absolute; right: 6px; top: 6px;
+  background: none; border: none; color: var(--text2); cursor: pointer; font-size: 13px;
+  display: none;
+}
+.caption-row:hover .cap-del { display: block; }
+.caption-row .cap-del:hover { color: var(--red); }
+
+.caption-editor {
+  display: flex; flex-direction: column; gap: 12px;
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 16px; overflow-y: auto;
+}
+.cap-preview-wrap {
+  position: relative; background: #000; border-radius: 6px;
+  overflow: hidden; flex-shrink: 0;
+}
+.cap-preview-wrap img { width: 100%; display: block; }
+.cap-overlay-text {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  padding: 4px 12px; border-radius: 4px;
+  pointer-events: none; white-space: pre-wrap; text-align: center;
+  max-width: 90%;
+}
+.cap-field { display: flex; flex-direction: column; gap: 4px; }
+.cap-field label { font-size: 11px; color: var(--text2); font-weight: 500; }
+.cap-field input[type="text"],
+.cap-field textarea,
+.cap-field select,
+.cap-field input[type="number"] {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; font-size: 13px; width: 100%;
+}
+.cap-field textarea { resize: vertical; min-height: 64px; font-family: inherit; }
+.cap-row-inline { display: flex; gap: 8px; }
+.cap-row-inline .cap-field { flex: 1; }
+
+.llm-panel {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 16px;
+  border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
 }
-.version-group h3 { font-size: 14px; margin-bottom: 12px; color: var(--accent2); }
-.version-group .thumbs { display: flex; gap: 6px; overflow-x: auto; }
-.version-group .thumbs img { height: 120px; border-radius: 4px; }
+.llm-panel h4 { font-size: 13px; margin: 0 0 12px 0; color: var(--text); }
+.llm-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.llm-fields label { font-size: 11px; color: var(--text2); display: block; margin-bottom: 4px; }
+.llm-fields select, .llm-fields input {
+  width: 100%; background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; font-size: 12px;
+}
+.llm-api-row {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 10px;
+}
+.llm-api-row input {
+  flex: 1; background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; font-size: 12px; font-family: monospace;
+}
 
 /* ─── Publish ─────── */
 .publish-section { max-width: 640px; }
@@ -707,8 +793,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
   <div class="tab" data-tab="crop">
     <span class="num">4</span>Przycinanie
   </div>
-  <div class="tab" data-tab="versions">
-    <span class="num">5</span>Wersje
+  <div class="tab" data-tab="captions">
+    <span class="num">5</span>Napisy
   </div>
   <div class="tab" data-tab="publish">
     <span class="num">6</span>Publikacja
@@ -781,61 +867,6 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 
     <div class="missing-frames-banner" id="missingFramesBanner"></div>
     <div id="frameGrid" class="frame-grid"></div>
-
-    <!-- Focus Mode Preview for Select Tab -->
-    <div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
-      <h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text)">🎯 Podgląd trybu focusu</h4>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:16px">
-        <label class="focus-option">
-          <input type="radio" name="selectFocusMode" value="screen" checked onchange="updateSelectFocusMode('screen')">
-          <span>🖥️ Ekran</span>
-        </label>
-        <label class="focus-option">
-          <input type="radio" name="selectFocusMode" value="mouse" onchange="updateSelectFocusMode('mouse')">
-          <span>🖱️ Mysz</span>
-        </label>
-        <label class="focus-option">
-          <input type="radio" name="selectFocusMode" value="keyboard" onchange="updateSelectFocusMode('keyboard')">
-          <span>⌨️ Klawiatura</span>
-        </label>
-        <label class="focus-option">
-          <input type="radio" name="selectFocusMode" value="application" onchange="updateSelectFocusMode('application')">
-          <span>🪬 Aplikacja</span>
-        </label>
-      </div>
-      
-      <div id="selectZoomControls" style="display:none">
-        <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px">
-          🔍 Zoom myszy: <span id="selectZoomValue">2.0x</span>
-        </label>
-        <input type="range" id="selectZoomSlider" min="1" max="10" value="2" step="0.5" 
-               oninput="updateSelectZoom(this.value)"
-               style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
-          <span>1x</span><span>5x</span><span>10x</span>
-        </div>
-        
-        <label style="font-size:13px;color:var(--text2);display:block;margin:12px 0 8px 0">
-          📏 Obszar wokół myszy: <span id="selectPaddingValue">100px</span>
-        </label>
-        <input type="range" id="selectPaddingSlider" min="50" max="300" value="100" step="10" 
-               oninput="updateSelectPadding(this.value)"
-               style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
-          <span>50px</span><span>175px</span><span>300px</span>
-        </div>
-      </div>
-      
-      <div id="selectVideoPreviewContainer" style="margin-top:16px">
-        <h5 style="margin:0 0 8px 0;font-size:13px;color:var(--text)">🎬 Podgląd pierwszej zaznaczonej klatki</h5>
-        <div id="selectVideoPreview" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;min-height:120px;display:flex;align-items:center;justify-content:center;position:relative">
-          <div style="color:var(--text2);font-size:12px;text-align:center">
-            <div>⏳ Wybierz klatki aby zobaczyć podgląd</div>
-            <small style="display:block;margin-top:4px">Zmień tryb focusu aby zobaczyć różnicę</small>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <div class="btn-group">
       <button class="btn btn-outline" onclick="selectAllFrames()">Zaznacz wszystkie</button>
@@ -1030,50 +1061,117 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
     <div id="cropPreviewGrid" class="crop-preview-grid"></div>
     <div class="btn-group">
       <button class="btn btn-outline" onclick="navigateToTab('center')">← Wstecz</button>
-      <button class="btn btn-primary" onclick="navigateToTab('versions')">Dalej → Wersje</button>
+      <button class="btn btn-primary" onclick="navigateToTab('captions')">Dalej → Napisy</button>
     </div>
   </div>
 
-  <!-- ═══ Tab 4: Multiple Versions ═══ -->
-  <div class="panel" id="panel-versions">
+  <!-- ═══ Tab 5: Captions / Napisy ═══ -->
+  <div class="panel" id="panel-captions">
     <div class="panel-header">
-      <h2>Porównanie wersji</h2>
-      <p>Podgląd wszystkich formatów obok siebie.</p>
+      <h2>Napisy</h2>
+      <p>Dodaj opisy do klatek — ręcznie lub automatycznie przez AI. Pozycjonuj tekst jak w Canva.</p>
     </div>
 
     <div class="tools-bar">
-      <button class="tool-btn success" onclick="generateVersions()" title="Generuj zaznaczone wersje">
-        <span class="icon">⚙️</span> Generuj wersje
+      <button class="tool-btn success" onclick="addCaption()" title="Dodaj nowy napis">
+        <span class="icon">➕</span> Dodaj napis
       </button>
-      <button class="tool-btn" onclick="compareVersionsSideBySide()" title="Bok-do-boku">
-        <span class="icon">🔲</span> Porównanie bok-do-boku
+      <button class="tool-btn" onclick="autoCaptionsFromFrames()" title="Auto: utwórz napis dla każdej klatki">
+        <span class="icon">🔄</span> Auto (1 napis/klatka)
       </button>
-      <button class="tool-btn" onclick="downloadAllVersions()" title="Pobierz wszystkie wersje">
-        <span class="icon">📥</span> Pobierz wszystkie
+      <button class="tool-btn" onclick="saveCaptions()" title="Zapisz napisy">
+        <span class="icon">💾</span> Zapisz
       </button>
-      <div class="tools-divider"></div>
-      <button class="tool-btn advanced" onclick="advancedUpscale()" title="AI upscale (wymaga Real-ESRGAN)">
-        <span class="icon">🧠</span> AI upscale
+      <button class="tool-btn danger" onclick="clearAllCaptions()" title="Usuń wszystkie napisy">
+        <span class="icon">🗑</span> Wyczyść
       </button>
     </div>
 
-    <div class="preset-bar" id="versionPresetBar"></div>
-    <div class="btn-group" style="margin-bottom:16px">
-      <button class="btn btn-primary" onclick="generateVersions()">Generuj wybrane wersje</button>
+    <!-- LLM Panel -->
+    <div class="llm-panel">
+      <h4>🤖 Generowanie przez AI (LLM)</h4>
+      <div class="llm-api-row">
+        <span style="font-size:11px;color:var(--text2);white-space:nowrap">Klucz API:</span>
+        <input type="password" id="llmApiKey" placeholder="sk-... (lub ustaw zmienną OPENAI_API_KEY)" 
+               title="Zostaw puste jeśli masz OPENAI_API_KEY w środowisku">
+      </div>
+      <div class="llm-fields">
+        <div>
+          <label>Provider</label>
+          <select id="llmProvider" onchange="updateLlmModelPlaceholder()">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="ollama">Ollama (lokalny)</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+        <div>
+          <label>Model</label>
+          <input type="text" id="llmModel" value="gpt-4o-mini" placeholder="gpt-4o-mini">
+        </div>
+        <div>
+          <label>Język</label>
+          <select id="llmLanguage">
+            <option value="pl">Polski</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+          </select>
+        </div>
+        <div>
+          <label>Styl napisów</label>
+          <select id="llmStyle">
+            <option value="tutorial">Tutorial (krok po kroku)</option>
+            <option value="social">Social media</option>
+            <option value="minimal">Minimalny</option>
+            <option value="descriptive">Opisowy</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="generateCaptionsLLM()" id="llmGenerateBtn">
+        🤖 Generuj napisy AI
+      </button>
+      <span id="llmStatus" style="font-size:12px;color:var(--text2);margin-left:12px"></span>
     </div>
-    <div id="versionsGrid" class="versions-grid"></div>
-    <div class="btn-group">
+
+    <!-- Main editor layout -->
+    <div class="captions-layout">
+      <!-- Left: timeline/list -->
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">
+            Lista napisów <span id="captionCount" style="color:var(--text2);font-weight:400">(0)</span>
+          </span>
+          <button class="tool-btn" style="padding:4px 10px;font-size:11px" onclick="addCaption()">+ Nowy</button>
+        </div>
+        <div class="captions-timeline" id="captionsList">
+          <div style="text-align:center;padding:40px;color:var(--text2);font-size:13px">
+            Brak napisów — dodaj ręcznie lub wygeneruj AI
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: editor -->
+      <div class="caption-editor" id="captionEditor">
+        <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">
+          Kliknij napis na liście aby edytować
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-group" style="margin-top:16px">
       <button class="btn btn-outline" onclick="navigateToTab('crop')">← Wstecz</button>
-      <button class="btn btn-primary" onclick="navigateToTab('publish')">Dalej → Publikacja</button>
+      <button class="btn btn-success" onclick="saveCaptions(); navigateToTab('publish')">Zapisz i dalej → Publikacja</button>
     </div>
   </div>
 
-  <!-- ═══ Tab 5: Publish ═══ -->
+  <!-- ═══ Tab 6: Publish ═══ -->
   <div class="panel" id="panel-publish">
     <div class="panel-header">
       <h2>Eksport i publikacja</h2>
       <p>Eksportuj jako wideo, GIF lub paczkę PNG, i udostępnij.</p>
     </div>
+
+    <div class="panel-subtitle" id="publishPresetInfo">Wybrany format: —</div>
 
     <div class="tools-bar">
       <button class="tool-btn success" onclick="exportSession()" title="Eksportuj z aktualnymi ustawieniami">
@@ -1092,72 +1190,11 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
     </div>
 
     <div class="publish-section">
-      <!-- Focus Mode & Zoom Settings -->
-      <div style="margin-bottom:20px;padding:16px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
-        <h4 style="margin:0 0 12px 0;font-size:14px;color:var(--text)">🎯 Ustawienia focusu</h4>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:16px">
-          <label class="focus-option">
-            <input type="radio" name="exportFocusMode" value="screen" checked onchange="updateExportFocusMode('screen')">
-            <span>🖥️ Ekran</span>
-          </label>
-          <label class="focus-option">
-            <input type="radio" name="exportFocusMode" value="mouse" onchange="updateExportFocusMode('mouse')">
-            <span>🖱️ Mysz</span>
-          </label>
-          <label class="focus-option">
-            <input type="radio" name="exportFocusMode" value="keyboard" onchange="updateExportFocusMode('keyboard')">
-            <span>⌨️ Klawiatura</span>
-          </label>
-          <label class="focus-option">
-            <input type="radio" name="exportFocusMode" value="application" onchange="updateExportFocusMode('application')">
-            <span>🪬 Aplikacja</span>
-          </label>
-        </div>
-        
-        <div id="exportZoomControls" style="display:none">
-          <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px">
-            🔍 Zoom myszy: <span id="exportZoomValue">2.0x</span>
-          </label>
-          <input type="range" id="exportZoomSlider" min="1" max="10" value="2" step="0.5" 
-                 oninput="updateExportZoom(this.value)"
-                 style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
-            <span>1x</span><span>5x</span><span>10x</span>
-          </div>
-          
-          <label style="font-size:13px;color:var(--text2);display:block;margin:12px 0 8px 0">
-            📏 Obszar wokół myszy: <span id="exportPaddingValue">100px</span>
-          </label>
-          <input type="range" id="exportPaddingSlider" min="50" max="300" value="100" step="10" 
-                 oninput="updateExportPadding(this.value)"
-                 style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
-            <span>50px</span><span>175px</span><span>300px</span>
-          </div>
-        </div>
-        
-        <!-- Export Video Preview -->
-        <div id="exportVideoPreviewContainer" style="margin-top:16px">
-          <h5 style="margin:0 0 8px 0;font-size:13px;color:var(--text)">🎬 Podgląd pierwszej klatki wideo</h5>
-          <div id="exportVideoPreview" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;min-height:120px;display:flex;align-items:center;justify-content:center;position:relative">
-            <div style="color:var(--text2);font-size:12px;text-align:center">
-              <div>⏳ Generowanie podglądu...</div>
-              <small style="display:block;margin-top:4px">Zmień ustawienia aby zobaczyć efekt</small>
-            </div>
-          </div>
-        </div>
-      </div>
       <div class="export-options">
-        <div class="export-row">
-          <label>Format:</label>
-          <select id="exportPreset">
-            <option value="">Ładowanie...</option>
-          </select>
-        </div>
         <div class="export-row">
           <label>Czas/klatka:</label>
           <input type="range" id="exportDuration" min="0.1" max="5" value="0.5" step="0.1" 
-                 oninput="document.getElementById('durationValue').textContent = this.value + 's'">
+                 oninput="document.getElementById('durationValue').textContent = this.value + 's'; syncConfigToURL();">
           <span id="durationValue" class="range-value">0.5s</span>
           <div class="range-labels">
             <span>0.1s</span><span>2.5s</span><span>5s</span>
@@ -1166,7 +1203,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         <div class="export-row">
           <label>Jakość:</label>
           <input type="range" id="exportQuality" min="10" max="100" value="70" step="5" 
-                 oninput="document.getElementById('qualityValue').textContent = this.value + '%'">
+                 oninput="document.getElementById('qualityValue').textContent = this.value + '%'; syncConfigToURL();">
           <span id="qualityValue" class="range-value">70%</span>
           <div class="range-labels">
             <span>Niska</span><span>Średnia</span><span>Wysoka</span>
@@ -1183,23 +1220,14 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         </div>
       </div>
 
-      <div class="format-buttons">
-        <button class="format-btn" onclick="exportFormat('video')" data-format="video">
-          <span class="format-icon">🎬</span>
-          <span class="format-name">MP4</span>
-        </button>
-        <button class="format-btn" onclick="exportFormat('gif')" data-format="gif">
-          <span class="format-icon">🎨</span>
-          <span class="format-name">GIF</span>
-        </button>
-        <button class="format-btn" onclick="exportFormat('webm')" data-format="webm">
-          <span class="format-icon">🌐</span>
-          <span class="format-name">WebM</span>
-        </button>
-        <button class="format-btn" onclick="exportFormat('zip')" data-format="zip">
-          <span class="format-icon">📁</span>
-          <span class="format-name">ZIP</span>
-        </button>
+      <div class="export-row">
+        <label>Format:</label>
+        <select id="exportFormat" onchange="exportSession()">
+          <option value="video">🎬 MP4</option>
+          <option value="gif">🎨 GIF</option>
+          <option value="webm">🌐 WebM</option>
+          <option value="zip">📁 ZIP</option>
+        </select>
       </div>
 
       <button class="btn btn-success" onclick="exportAllFormats()" id="exportBtn">
@@ -1257,10 +1285,31 @@ function updateURL(sessionName = null, tabName = null) {
   let url = '/';
   
   if (sessionName) {
-    url = `/session/${sessionName}/tab/${tabName || 'select'}`;
+    const params = new URLSearchParams();
+    params.set('preset', activePreset || '');
+    params.set('focus', currentFocusMode);
+    params.set('zoom', String(currentZoomLevel));
+    params.set('pad', String(currentMousePadding));
+    params.set('dur', document.getElementById('exportDuration')?.value || '0.5');
+    params.set('quality', document.getElementById('exportQuality')?.value || '70');
+    url = `/session/${sessionName}/tab/${tabName || 'select'}?${params.toString()}`;
   }
   
   window.history.pushState({}, '', url);
+}
+
+function syncConfigToURL() {
+  if (!currentSession) return;
+  const { tabName } = parseURL();
+  const params = new URLSearchParams();
+  params.set('preset', activePreset || '');
+  params.set('focus', currentFocusMode);
+  params.set('zoom', String(currentZoomLevel));
+  params.set('pad', String(currentMousePadding));
+  params.set('dur', document.getElementById('exportDuration')?.value || '0.5');
+  params.set('quality', document.getElementById('exportQuality')?.value || '70');
+  const url = `/session/${currentSession}/tab/${tabName || 'select'}?${params.toString()}`;
+  window.history.replaceState({}, '', url);
 }
 
 function navigateToSession(sessionName, tabName = 'select') {
@@ -1278,14 +1327,53 @@ function navigateToTab(tabName) {
   switchTab(tabName);
 }
 
+function applyConfigFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const preset = params.get('preset');
+  const focus = params.get('focus');
+  const zoom = params.get('zoom');
+  const pad = params.get('pad');
+  const dur = params.get('dur');
+  const quality = params.get('quality');
+
+  if (preset && presets[preset]) {
+    activePreset = preset;
+    updatePresetBtns();
+  }
+  if (focus) updateFocusMode(focus);
+  if (zoom) updateZoom(parseFloat(zoom));
+  if (pad) updatePadding(parseInt(pad));
+  if (dur) {
+    const durationEl = document.getElementById('exportDuration');
+    const durationValue = document.getElementById('durationValue');
+    if (durationEl && durationValue) {
+      durationEl.value = dur;
+      durationValue.textContent = `${dur}s`;
+    }
+  }
+  if (quality) {
+    const qualityEl = document.getElementById('exportQuality');
+    const qualityValue = document.getElementById('qualityValue');
+    if (qualityEl && qualityValue) {
+      qualityEl.value = quality;
+      qualityValue.textContent = `${quality}%`;
+    }
+  }
+  updatePublishPresetInfo();
+}
+
 // ─── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSessions();
   await loadPresets();
+  applyConfigFromURL();
   setupDragDrop();
   setupCenterCanvas();
   buildSocialLinks();
   updateTabHandlers();
+
+  document.getElementById('exportDuration')?.addEventListener('input', syncConfigToURL);
+  document.getElementById('exportQuality')?.addEventListener('input', syncConfigToURL);
   
   // Handle browser back/forward
   window.addEventListener('popstate', () => {
@@ -1431,21 +1519,16 @@ function toggleFrame(idx, card) {
     card.classList.add('selected');
     card.querySelector('.check').textContent = '✓';
   }
-  
-  // Update select tab video preview when selection changes
-  updateSelectVideoPreview();
 }
 
 function selectAllFrames() {
   sessionData.frames.forEach((_, i) => selectedFrames.add(i));
   renderFrameGrid();
-  updateSelectVideoPreview();
 }
 
 function deselectAllFrames() {
   selectedFrames.clear();
   renderFrameGrid();
-  updateSelectVideoPreview();
 }
 
 // ─── Frame Trash ───────────────────────────────────────────────────────────────
@@ -1891,125 +1974,6 @@ function copyCenterToAll() {
   toast(`Skopiowano środek (${current.x}, ${current.y}) do ${selectedFrames.size} klatek`);
 }
 
-// ─── Select Tab Focus Mode Functions ───────────────────────────────────────
-function updateSelectFocusMode(mode) {
-  currentFocusMode = mode;
-  const zoomControls = document.getElementById('selectZoomControls');
-  zoomControls.style.display = mode === 'mouse' ? 'block' : 'none';
-  
-  // Sync with other tabs
-  document.querySelector('input[name="focusMode"][value="' + mode + '"]').checked = true;
-  document.querySelector('input[name="exportFocusMode"][value="' + mode + '"]').checked = true;
-  
-  // Update video preview
-  updateSelectVideoPreview();
-  
-  toast(`Tryb focusu: ${mode === 'screen' ? 'Ekran' : mode === 'mouse' ? 'Mysz' : mode === 'keyboard' ? 'Klawiatura' : 'Aplikacja'}`);
-}
-
-function updateSelectZoom(value) {
-  currentZoomLevel = parseFloat(value);
-  document.getElementById('selectZoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
-  
-  // Sync with other tabs
-  document.getElementById('zoomSlider').value = value;
-  document.getElementById('zoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
-  document.getElementById('exportZoomSlider').value = value;
-  document.getElementById('exportZoomValue').textContent = currentZoomLevel.toFixed(1) + 'x';
-  
-  // Update video preview
-  updateSelectVideoPreview();
-}
-
-function updateSelectPadding(value) {
-  currentMousePadding = parseInt(value);
-  document.getElementById('selectPaddingValue').textContent = currentMousePadding + 'px';
-  
-  // Sync with other tabs
-  document.getElementById('paddingSlider').value = value;
-  document.getElementById('paddingValue').textContent = currentMousePadding + 'px';
-  document.getElementById('exportPaddingSlider').value = value;
-  document.getElementById('exportPaddingValue').textContent = currentMousePadding + 'px';
-  
-  // Update video preview
-  updateSelectVideoPreview();
-}
-
-function updateSelectVideoPreview() {
-  // Clear previous timeout
-  if (videoPreviewTimeout) {
-    clearTimeout(videoPreviewTimeout);
-  }
-  
-  // Debounce preview generation
-  videoPreviewTimeout = setTimeout(() => {
-    generateSelectVideoPreview();
-  }, 500);
-}
-
-async function generateSelectVideoPreview() {
-  if (!currentSession || !sessionData) return;
-  
-  const previewEl = document.getElementById('selectVideoPreview');
-  if (!previewEl) return;
-  
-  // Check if any frames are selected
-  if (selectedFrames.size === 0) {
-    previewEl.innerHTML = `
-      <div style="color:var(--text2);font-size:12px;text-align:center">
-        <div>⏳ Wybierz klatki aby zobaczyć podgląd</div>
-        <small style="display:block;margin-top:4px">Zaznacz klatki klikając na nie</small>
-      </div>
-    `;
-    return;
-  }
-  
-  // Show loading state
-  previewEl.innerHTML = `
-    <div style="color:var(--text2);font-size:12px;text-align:center">
-      <div class="spinner" style="margin:0 auto 8px auto"></div>
-      <div>Generowanie podglądu...</div>
-      <small style="display:block;margin-top:4px">${currentFocusMode === 'mouse' ? `Zoom ${currentZoomLevel}x • obszar ${currentMousePadding}px` : currentFocusMode}</small>
-    </div>
-  `;
-  
-  try {
-    const result = await api(`/sessions/${currentSession}/video-preview`, {
-      method: 'POST',
-      body: {
-        preset: activePreset,
-        frame_indices: [...selectedFrames].sort(),
-        focus_mode: currentFocusMode,
-        zoom_level: currentZoomLevel,
-        mouse_padding: currentMousePadding,
-      },
-    });
-    
-    const focusIcon = result.focus_mode === 'mouse' ? '🖱️' : 
-                      result.focus_mode === 'keyboard' ? '⌨️' : 
-                      result.focus_mode === 'application' ? '🪬' : '🖥️';
-    
-    previewEl.innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%">
-        <img src="${result.preview_url}" style="max-width:100%;max-height:200px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
-        <div style="font-size:11px;color:var(--text2);text-align:center;line-height:1.4">
-          <div><strong>Klatka #${result.frame_index + 1}</strong> • ${focusIcon} ${result.focus_mode}</div>
-          ${result.focus_mode === 'mouse' ? `<div>Zoom ${result.zoom_level}x • obszar ${currentMousePadding}px</div>` : ''}
-          <div>Wycięto: ${result.crop.w}×${result.crop.h}px → ${result.target.w}×${result.target.h}px</div>
-          <div>Środek: (${result.center.x}, ${result.center.y})</div>
-        </div>
-      </div>
-    `;
-  } catch (e) {
-    previewEl.innerHTML = `
-      <div style="color:var(--red);font-size:12px;text-align:center">
-        <div>❌ Błąd generowania podglądu</div>
-        <small style="display:block;margin-top:4px">${e.message}</small>
-      </div>
-    `;
-  }
-}
-
 // ─── Export Focus Mode Functions ───────────────────────────────────────────
 function updateExportFocusMode(mode) {
   currentFocusMode = mode;
@@ -2061,14 +2025,13 @@ function updateVideoPreview() {
   // Debounce preview generation
   videoPreviewTimeout = setTimeout(() => {
     generateVideoPreview('crop');
-    generateVideoPreview('export');
   }, 500);
 }
 
 async function generateVideoPreview(context) {
   if (!currentSession || !sessionData) return;
   
-  const previewId = context === 'crop' ? 'videoPreview' : 'exportVideoPreview';
+  const previewId = 'videoPreview';
   const previewEl = document.getElementById(previewId);
   
   if (!previewEl) return;
@@ -2515,32 +2478,34 @@ async function saveCenters() {
 async function loadPresets() {
   presets = await api('/presets');
   renderPresetBars();
-  populateExportPreset();
+  updatePublishPresetInfo();
 }
 
 function renderPresetBars() {
-  ['presetBar', 'versionPresetBar'].forEach(id => {
-    const bar = document.getElementById(id);
-    bar.innerHTML = '';
-    for (const [key, p] of Object.entries(presets)) {
-      const btn = document.createElement('button');
-      btn.className = `preset-btn${key === activePreset ? ' active' : ''}`;
-      btn.textContent = p.label;
-      btn.dataset.preset = key;
-      if (id === 'presetBar') {
-        btn.onclick = () => { activePreset = key; updatePresetBtns(); loadCropPreview(); };
-      } else {
-        btn.onclick = () => btn.classList.toggle('active');
-      }
-      bar.appendChild(btn);
-    }
-  });
+  const bar = document.getElementById('presetBar');
+  bar.innerHTML = '';
+  for (const [key, p] of Object.entries(presets)) {
+    const btn = document.createElement('button');
+    btn.className = `preset-btn${key === activePreset ? ' active' : ''}`;
+    btn.textContent = p.label;
+    btn.dataset.preset = key;
+    btn.onclick = () => { activePreset = key; updatePresetBtns(); loadCropPreview(); };
+    bar.appendChild(btn);
+  }
 }
 
 function updatePresetBtns() {
   document.querySelectorAll('#presetBar .preset-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.preset === activePreset);
   });
+  updatePublishPresetInfo();
+}
+
+function updatePublishPresetInfo() {
+  const info = document.getElementById('publishPresetInfo');
+  if (!info || !presets[activePreset]) return;
+  const preset = presets[activePreset];
+  info.textContent = `Wybrany format: ${preset.label} (${preset.w}×${preset.h})`;
 }
 
 async function loadCropPreview() {
@@ -2579,68 +2544,20 @@ async function loadCropPreview() {
   });
 }
 
-// ─── Tab 4: Versions ────────────────────────────────────────────────────────
-async function generateVersions() {
-  if (!currentSession) return;
-  const selected = [];
-  document.querySelectorAll('#versionPresetBar .preset-btn.active').forEach(b => {
-    selected.push(b.dataset.preset);
-  });
-  if (selected.length === 0) { toast('Zaznacz przynajmniej jeden format'); return; }
-
-  const grid = document.getElementById('versionsGrid');
-  grid.innerHTML = '<div class="spinner"></div>';
-
-  const result = await api(`/sessions/${currentSession}/generate-versions`, {
-    method: 'POST',
-    body: { presets: selected, frame_indices: [...selectedFrames].sort() },
-  });
-
-  grid.innerHTML = '';
-  for (const [key, ver] of Object.entries(result)) {
-    const group = document.createElement('div');
-    group.className = 'version-group';
-    let thumbsHtml = ver.previews.map(p =>
-      `<img src="/api/sessions/${currentSession}/preview/${p.filename}" title="Klatka #${p.index+1}">`
-    ).join('');
-    group.innerHTML = `
-      <h3>${ver.label} (${ver.target.w}×${ver.target.h})</h3>
-      <div class="thumbs">${thumbsHtml}</div>
-    `;
-    grid.appendChild(group);
-  }
-}
-
-// ─── Tab 5: Publish ─────────────────────────────────────────────────────────
-function populateExportPreset() {
-  const sel = document.getElementById('exportPreset');
-  sel.innerHTML = '';
-  for (const [key, p] of Object.entries(presets)) {
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = p.label;
-    sel.appendChild(opt);
-  }
-}
-
-async function exportFormat(format) {
+async function exportSession() {
   if (!currentSession) return;
   
-  // Update button states
-  document.querySelectorAll('.format-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.format === format);
-  });
-  
-  const btn = document.querySelector(`[data-format="${format}"]`);
+  const format = document.getElementById('exportFormat').value;
+  const btn = document.getElementById('exportBtn');
   const originalHtml = btn.innerHTML;
-  btn.innerHTML = '<span class="spinner"></span><span class="format-name">Generuję...</span>';
+  btn.innerHTML = '<span class="spinner"></span>Generuję...';
   btn.disabled = true;
 
   try {
     const result = await api(`/sessions/${currentSession}/export`, {
       method: 'POST',
       body: {
-        preset: document.getElementById('exportPreset').value,
+        preset: activePreset,
         format: format,
         duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
         fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
@@ -2712,7 +2629,7 @@ async function exportAllFormats() {
       api(`/sessions/${currentSession}/export`, {
         method: 'POST',
         body: {
-          preset: document.getElementById('exportPreset').value,
+          preset: activePreset,
           format: format,
           duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
           fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
@@ -2846,6 +2763,9 @@ function switchTab(name) {
     loadCropPreview();
     // Generate video preview when switching to crop tab
     setTimeout(() => updateVideoPreview(), 100);
+  }
+  if (name === 'captions') {
+    loadCaptionsPanel();
   }
 }
 

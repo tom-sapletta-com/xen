@@ -9,7 +9,83 @@ from pathlib import Path
 from datetime import datetime
 from PIL import Image
 
-logger = logging.getLogger("xeen.server")
+# Dodaj loguru dla lepszego logowania
+try:
+    from loguru import logger
+    # Usuń domyślny handler i dodaj własny
+    logger.remove()
+    logger.add(
+        lambda msg: print(msg, end=""),  # Drukuj bez dodatkowych newline
+        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level="INFO"
+    )
+    
+    # Dekoratory do logowania
+    def log_request(func):
+        """Decorator do logowania requestów API"""
+        import functools
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Pobierz nazwę sesji z args jeśli dostępna
+            session_name = "unknown"
+            if args and hasattr(args[0], '__name__') and 'session' in str(args):
+                for arg in args:
+                    if isinstance(arg, str) and len(arg) > 10:  # prawdopodobnie nazwa sesji
+                        session_name = arg
+                        break
+            
+            logger.info(f"🌐 **API Request**: `{func.__name__}` for session `{session_name}`")
+            start_time = datetime.now()
+            
+            try:
+                result = await func(*args, **kwargs)
+                duration = (datetime.now() - start_time).total_seconds()
+                logger.info(f"✅ **API Success**: `{func.__name__}` completed in `{duration:.3f}s`")
+                return result
+            except Exception as e:
+                duration = (datetime.now() - start_time).total_seconds()
+                logger.error(f"❌ **API Error**: `{func.__name__}` failed in `{duration:.3f}s` - `{str(e)}`")
+                raise
+        return wrapper
+    
+    def log_process_step(step_name):
+        """Decorator do logowania kroków procesowych"""
+        def decorator(func):
+            import functools
+            @functools.wraps(func)
+            async def wrapper(*args, **kwargs):
+                logger.info(f"⏳ **Process Step**: Starting `{step_name}`")
+                start_time = datetime.now()
+                
+                try:
+                    result = await func(*args, **kwargs)
+                    duration = (datetime.now() - start_time).total_seconds()
+                    logger.info(f"✅ **Process Step**: `{step_name}` completed in `{duration:.3f}s`")
+                    return result
+                except Exception as e:
+                    duration = (datetime.now() - start_time).total_seconds()
+                    logger.error(f"❌ **Process Step**: `{step_name}` failed in `{duration:.3f}s` - `{str(e)}`")
+                    raise
+            return wrapper
+        return decorator
+    
+except ImportError:
+    # Fallback do standardowego logging jeśli loguru nie jest zainstalowane
+    logger = logging.getLogger("xeen.server")
+    logging.basicConfig(
+        format='%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=logging.INFO
+    )
+    logger.info("⚠️  Zainstaluj 'loguru' dla lepszego formatowania logów: pip install loguru")
+    
+    # Puste dekoratory fallback
+    def log_request(func):
+        return func
+    def log_process_step(step_name):
+        def decorator(func):
+            return func
+        return decorator
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +104,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Middleware do logowania wszystkich requestów
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """Log every HTTP request with detailed information."""
+    start_time = datetime.now()
+    
+    # Pobierz informacje o requescie
+    method = request.method
+    url = str(request.url)
+    path = request.url.path
+    
+    # Ekstrakcja nazwy sesji z URL jeśli dostępna
+    session_name = "unknown"
+    if "/api/sessions/" in path:
+        parts = path.split("/")
+        if len(parts) > 3:
+            session_name = parts[3]
+    
+    # Loguj początek requestu
+    logger.info(f"🌐 **HTTP Request**: `{method} {path}` for session `{session_name}`")
+    
+    try:
+        response = await call_next(request)
+        duration = (datetime.now() - start_time).total_seconds()
+        
+        # Loguj sukces
+        logger.info(f"✅ **HTTP Response**: `{method} {path}` → `{response.status_code}` in `{duration:.3f}s`")
+        
+        return response
+    except Exception as e:
+        duration = (datetime.now() - start_time).total_seconds()
+        
+        # Loguj błąd
+        logger.error(f"❌ **HTTP Error**: `{method} {path}` failed in `{duration:.3f}s` - `{str(e)}`")
+        raise
+
 # Mount static files
 _static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
@@ -37,9 +149,24 @@ def data_dir() -> Path:
     return get_data_dir()
 
 
+# ─── Startup Event ────────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information in Markdown style."""
+    data_path = data_dir()
+    
+    logger.info("🚀 **xeen server starting up**")
+    logger.info(f"📁 **Data directory**: `{data_path}`")
+    logger.info(f"🌐 **Server URL**: `http://127.0.0.1:7600`")
+    logger.info(f"📸 **Static files**: `{_static_dir}`")
+    logger.info("✅ **Server ready to accept connections**")
+    logger.info("---")
+
+
 # ─── API: Sessions ───────────────────────────────────────────────────────────
 
 @app.get("/api/sessions")
+@log_request
 async def list_sessions():
     """Lista wszystkich sesji nagrywania."""
     sessions_dir = data_dir() / "sessions"
@@ -447,8 +574,16 @@ async def crop_preview(name: str, req: CropRequest):
 
 
 @app.post("/api/sessions/{name}/video-preview")
+@log_request
+@log_process_step("video_preview_generation")
 async def generate_video_preview(name: str, req: CropRequest):
-    """Generuj podgląd pierwszej klatki wideo z ustawieniami focus/zoom."""
+    """Generuj podgląd pierwszej klatki wideo z ustawieniami focus/zoom - szybka miniatura."""
+    start_time = datetime.now()
+    logger.info(f"🎬 **Generating video preview** for session `{name}`")
+    logger.info(f"   - **Focus mode**: `{req.focus_mode}`")
+    logger.info(f"   - **Zoom level**: `{req.zoom_level}x`")
+    logger.info(f"   - **Mouse padding**: `{req.mouse_padding}px`")
+    
     meta_file = data_dir() / "sessions" / name / "session.json"
     if not meta_file.exists():
         raise HTTPException(404, "Session not found")
@@ -463,24 +598,112 @@ async def generate_video_preview(name: str, req: CropRequest):
     if first_frame_idx >= len(meta.get("frames", [])):
         raise HTTPException(404, "No frames available")
 
-    # Generuj crop preview tylko dla pierwszej klatki
-    req.frame_indices = [first_frame_idx]
-    crop_result = await crop_preview(name, req)
+    # Pobierz dane klatki
+    frame = meta["frames"][first_frame_idx]
+    frame_path = data_dir() / "sessions" / name / "frames" / frame["filename"]
     
-    if not crop_result["previews"]:
-        raise HTTPException(404, "Failed to generate preview")
+    if not frame_path.exists():
+        raise HTTPException(404, "Frame file not found")
+
+    # Twórz miniaturę z 10x mniejszą rozdzielczością
+    preview_dir = data_dir() / "sessions" / name / "preview"
+    preview_dir.mkdir(exist_ok=True)
     
-    preview = crop_result["previews"][0]
-    preview_url = f"/api/sessions/{name}/preview/{preview['filename']}"
+    # Użyj mniejszych wymiarów dla podglądu (10x mniej niż target)
+    preset = CROP_PRESETS.get(req.preset, CROP_PRESETS["instagram_post"])
+    small_target_w = preset["w"] // 10
+    small_target_h = preset["h"] // 10
+    
+    # Upewnij się, że wymiary są co najmniej 100px
+    small_target_w = max(small_target_w, 100)
+    small_target_h = max(small_target_h, 100)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    preview_filename = f"preview_{first_frame_idx}_{req.preset}_{timestamp}.jpg"
+    preview_path = preview_dir / preview_filename
+
+    # Szybkie generowanie miniatury
+    img = Image.open(frame_path)
+    iw, ih = img.size
+
+    # Wybierz środek w zależności od focus_mode
+    if req.focus_mode == "mouse":
+        cx = frame.get("mouse_x", iw // 2)
+        cy = frame.get("mouse_y", ih // 2)
+    elif req.focus_mode == "keyboard":
+        cx = frame.get("suggested_center_x", iw // 2)
+        cy = int(ih * 0.75)
+    elif req.focus_mode == "application":
+        cx = frame.get("suggested_center_x", iw // 2)
+        cy = int(ih * 0.25)
+    else:  # screen
+        cx = frame.get("suggested_center_x", iw // 2)
+        cy = frame.get("suggested_center_y", ih // 2)
+
+    # Oblicz region przycinania z zoomem
+    if req.focus_mode == "mouse":
+        # Dynamicznie ogranicz obszar wokół myszy do mniejszego wymiaru ekranu
+        max_padding = min(iw, ih) // 2  # Maksymalny padding to połowa mniejszego wymiaru
+        effective_padding = min(req.mouse_padding, max_padding)
+        
+        # Oblicz rozmiar crop regionu
+        crop_w = int((effective_padding * 2) / req.zoom_level)
+        crop_h = int((effective_padding * 2) / req.zoom_level)
+        
+        logger.info(f"   - **Effective padding**: `{effective_padding}px` (limited to `{max_padding}px`)")
+        logger.info(f"   - **Screen size**: `{iw}x{ih}px`")
+    else:
+        aspect = small_target_w / small_target_h
+        if iw / ih > aspect:
+            crop_h = int(ih / req.zoom_level)
+            crop_w = int(crop_h * aspect)
+        else:
+            crop_w = int(iw / req.zoom_level)
+            crop_h = int(crop_w / aspect)
+
+    # Ogranicz do rozmiarów obrazu
+    crop_w = min(crop_w, iw)
+    crop_h = min(crop_h, ih)
+
+    # Wyśrodkuj na wybranym punkcie
+    left = max(0, min(cx - crop_w // 2, iw - crop_w))
+    top = max(0, min(cy - crop_h // 2, ih - crop_h))
+
+    # Jeśli region wychodzi poza obraz, przesuń
+    if left + crop_w > iw:
+        left = iw - crop_w
+    if top + crop_h > ih:
+        top = ih - crop_h
+
+    # Wytnij i zmniejsz szybko (bez LANCZOS dla szybkości)
+    cropped = img.crop((left, top, left + crop_w, top + crop_h))
+    cropped = cropped.resize((small_target_w, small_target_h), Image.BILINEAR)  # Szybsze niż LANCZOS
+    
+    # Zapisz z umiarkowaną jakością dla szybkości
+    cropped.save(preview_path, "JPEG", quality=85, optimize=True)
+    
+    # Log performance metrics
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+    file_size = preview_path.stat().st_size
+    
+    logger.info(f"✅ **Preview generated successfully**")
+    logger.info(f"   - **Frame**: #{first_frame_idx + 1}")
+    logger.info(f"   - **Size**: `{small_target_w}x{small_target_h}px` (10x smaller)")
+    logger.info(f"   - **File size**: `{file_size} bytes`")
+    logger.info(f"   - **Generation time**: `{duration:.3f}s`")
+    logger.info(f"   - **Center**: `({cx}, {cy})`")
+
+    preview_url = f"/api/sessions/{name}/preview/{preview_filename}"
     
     return {
         "preview_url": preview_url,
-        "frame_index": preview["index"],
-        "focus_mode": preview["focus_mode"],
-        "zoom_level": preview["zoom_level"],
-        "center": preview["center"],
-        "crop": preview["crop"],
-        "target": preview["target"],
+        "frame_index": first_frame_idx,
+        "focus_mode": req.focus_mode,
+        "zoom_level": req.zoom_level,
+        "center": {"x": cx, "y": cy},
+        "crop": {"left": left, "top": top, "w": crop_w, "h": crop_h},
+        "target": {"w": small_target_w, "h": small_target_h},
         "settings": {
             "preset": req.preset,
             "focus_mode": req.focus_mode,
@@ -522,6 +745,144 @@ async def generate_versions(name: str, req: MultiVersionRequest):
     return results
 
 
+# ─── API: Captions (Napisy) ───────────────────────────────────────────────────
+
+class Caption(BaseModel):
+    id: str
+    frame_start: int
+    frame_end: int
+    text: str
+    x: float = 50.0       # % from left
+    y: float = 85.0       # % from top
+    font_size: int = 32
+    color: str = "#ffffff"
+    bg_color: str = "#000000"
+    bg_opacity: float = 0.5
+    bold: bool = False
+    italic: bool = False
+    align: str = "center"  # left | center | right
+
+
+class CaptionsPayload(BaseModel):
+    captions: list[Caption]
+
+
+class CaptionGenerateRequest(BaseModel):
+    frame_indices: list[int] | None = None
+    provider: str = "openai"
+    model: str = "gpt-4o-mini"
+    language: str = "pl"
+    style: str = "tutorial"  # tutorial | social | minimal | descriptive
+
+
+@app.get("/api/sessions/{name}/captions")
+async def get_captions(name: str):
+    """Pobierz napisy sesji."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+    meta = json.loads(meta_file.read_text())
+    return {"captions": meta.get("captions", [])}
+
+
+@app.post("/api/sessions/{name}/captions")
+async def save_captions(name: str, payload: CaptionsPayload):
+    """Zapisz napisy sesji."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+    meta = json.loads(meta_file.read_text())
+    meta["captions"] = [c.dict() for c in payload.captions]
+    meta_file.write_text(json.dumps(meta, indent=2))
+    logger.info(f"💬 **Captions saved**: `{len(payload.captions)}` for session `{name}`")
+    return {"ok": True, "count": len(payload.captions)}
+
+
+@app.post("/api/sessions/{name}/captions/generate")
+async def generate_captions(name: str, req: CaptionGenerateRequest):
+    """Generuj napisy przez LLM (liteLLM)."""
+    import os
+    import base64
+
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+    meta = json.loads(meta_file.read_text())
+    frames = meta.get("frames", [])
+    selected = req.frame_indices or list(range(len(frames)))
+
+    style_prompts = {
+        "tutorial":     "Opisz krok po kroku co widać na ekranie, używając czasu teraźniejszego. Max 10 słów.",
+        "social":       "Napisz angażujący, krótki opis dla social media. Max 8 słów.",
+        "minimal":      "Opisz akcję jednym zdaniem. Max 6 słów.",
+        "descriptive":  "Opisz szczegółowo co dzieje się na ekranie. Max 15 słów.",
+    }
+    style_hint = style_prompts.get(req.style, style_prompts["tutorial"])
+    lang_hint = "Odpowiedź po polsku." if req.language == "pl" else f"Answer in {req.language}."
+
+    try:
+        import litellm
+        litellm.set_verbose = False
+    except ImportError:
+        raise HTTPException(500, "liteLLM not installed. Run: pip install litellm")
+
+    captions = []
+    for idx in selected[:20]:  # limit do 20 klatek
+        frame = frames[idx] if idx < len(frames) else None
+        if not frame:
+            continue
+
+        frame_path = data_dir() / "sessions" / name / "frames" / frame["filename"]
+        if not frame_path.exists():
+            continue
+
+        # Encode image as base64
+        with open(frame_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+        try:
+            response = await litellm.acompletion(
+                model=f"{req.provider}/{req.model}" if req.provider != "openai" else req.model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"{style_hint} {lang_hint}"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{img_b64}"},
+                        },
+                    ],
+                }],
+                max_tokens=60,
+            )
+            text = response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.warning(f"⚠️ LLM failed for frame {idx}: {e}")
+            text = f"Klatka #{idx + 1}"
+
+        captions.append({
+            "id": f"cap_{idx}",
+            "frame_start": idx,
+            "frame_end": idx,
+            "text": text,
+            "x": 50.0,
+            "y": 85.0,
+            "font_size": 32,
+            "color": "#ffffff",
+            "bg_color": "#000000",
+            "bg_opacity": 0.5,
+            "bold": False,
+            "italic": False,
+            "align": "center",
+        })
+
+    logger.info(f"💬 **Captions generated**: `{len(captions)}` frames via `{req.model}`")
+    return {"captions": captions, "model": req.model, "style": req.style}
+
+
 # ─── API: Tab 5 - Export & Publish ────────────────────────────────────────────
 
 class ExportRequest(BaseModel):
@@ -538,8 +899,20 @@ class ExportRequest(BaseModel):
 
 
 @app.post("/api/sessions/{name}/export")
+@log_request
+@log_process_step("export_generation")
 async def export_session(name: str, req: ExportRequest):
     """Eksportuj jako wideo, GIF, WebM lub ZIP."""
+    start_time = datetime.now()
+    logger.info(f"📦 **Starting export** for session `{name}`")
+    logger.info(f"   - **Format**: `{req.format.upper()}`")
+    logger.info(f"   - **Preset**: `{req.preset}`")
+    logger.info(f"   - **Frames**: `{len(req.frame_indices) if req.frame_indices else 'all'}`")
+    logger.info(f"   - **Duration/frame**: `{req.duration_per_frame}s`")
+    logger.info(f"   - **FPS**: `{req.fps}`")
+    logger.info(f"   - **Quality**: `{req.quality}%`")
+    logger.info(f"   - **Focus mode**: `{req.focus_mode}`")
+    logger.info(f"   - **Zoom level**: `{req.zoom_level}x`")
 
     meta_file = data_dir() / "sessions" / name / "session.json"
     if not meta_file.exists():
@@ -680,9 +1053,22 @@ async def export_session(name: str, req: ExportRequest):
         finally:
             Path(list_file).unlink(missing_ok=True)
 
+    # Log export completion
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+    file_size = output_path.stat().st_size
+    size_mb = round(file_size / (1024*1024), 2)
+    
+    logger.info(f"✅ **Export completed successfully**")
+    logger.info(f"   - **File**: `{output_name}`")
+    logger.info(f"   - **Size**: `{size_mb} MB`")
+    logger.info(f"   - **Duration**: `{duration:.2f}s`")
+    logger.info(f"   - **Target resolution**: `{tw}x{th}px`")
+    logger.info("---")
+
     return {
         "filename": output_name,
-        "size_mb": round(output_path.stat().st_size / (1024*1024), 2),
+        "size_mb": size_mb,
         "download_url": f"/api/exports/{output_name}",
     }
 

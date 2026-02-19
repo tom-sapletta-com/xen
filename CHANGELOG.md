@@ -1,3 +1,20 @@
+## [0.1.13] - 2026-02-19
+
+### Summary
+
+refactor(build): deep code analysis engine with 7 supporting modules
+
+### Build
+
+- update pyproject.toml
+
+### Other
+
+- build: update Makefile
+- update xeen/server.py
+- update xeen/templates/index.html
+
+
 ## [0.1.12] - 2026-02-19
 
 ### Summary

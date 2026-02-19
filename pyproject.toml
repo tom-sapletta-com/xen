@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xeen"
-version = "0.1.12"
+version = "0.1.13"
 description = "Screenshot capture → edit → crop → publish. One command: xeen"
 readme = "README.md"
 license = "Apache-2.0"
@@ -34,6 +34,8 @@ dependencies = [
     "numpy>=1.24.0",
     "imagehash>=4.3.0",
     "pytesseract>=0.3.10",
+    "loguru>=0.7.0",
+    "litellm>=1.0.0",
 ]
 
 [project.optional-dependencies]

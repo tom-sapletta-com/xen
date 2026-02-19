@@ -1,4 +1,4 @@
-.PHONY: install install-system install-pip install-venv dev capture server docker deploy clean check desktop desktop-dev desktop-build install-desktop
+.PHONY: install install-system install-pip install-venv dev capture server stop docker deploy clean check desktop desktop-dev desktop-build install-desktop
 
 PYTHON  ?= python3
 VENV    ?= venv
@@ -72,6 +72,19 @@ capture:
 
 server:
 	xeen server
+
+stop:
+	@echo "🛑 Zamykanie serwera xeen..."
+	@if pgrep -f "xeen server" >/dev/null 2>&1; then \
+		pkill -TERM -f "xeen server" && sleep 2; \
+		if pgrep -f "xeen server" >/dev/null 2>&1; then \
+			echo "⚠️  Używam siłowego zakończenia..."; \
+			pkill -KILL -f "xeen server"; \
+		fi; \
+		echo "✅ Serwer xeen zamknięty"; \
+	else \
+		echo "ℹ️  Serwer xeen nie był uruchomiony"; \
+	fi
 
 # ─── Desktop (Tauri) ──────────────────────────────────────────────────────────
 
