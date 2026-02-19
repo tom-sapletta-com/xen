@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>xen — Screenshot → Video</title>
+<style>
+:root {
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --surface2: #24243a;
+  --border: #2d2d44;
+  --text: #e4e4ef;
+  --text2: #8888aa;
+  --accent: #7c5cfc;
+  --accent2: #5c9cfc;
+  --green: #4cda8a;
+  --red: #fc5c7c;
+  --orange: #fcac5c;
+  --radius: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ─── Header ─────── */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+}
+.header h1 { font-size: 20px; font-weight: 700; }
+.header h1 span { color: var(--accent); }
+.header .session-info { color: var(--text2); font-size: 13px; }
+.session-select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+
+/* ─── Tabs ─────── */
+.tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  padding: 0 24px; background: var(--surface);
+}
+.tab {
+  padding: 12px 20px; cursor: pointer; color: var(--text2);
+  font-size: 13px; font-weight: 500; border-bottom: 2px solid transparent;
+  transition: all 0.2s; user-select: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab .num {
+  display: inline-block; width: 20px; height: 20px; line-height: 20px;
+  text-align: center; border-radius: 50%; background: var(--surface2);
+  font-size: 11px; margin-right: 6px;
+}
+.tab.active .num { background: var(--accent); color: white; }
+
+/* ─── Content ─────── */
+.content { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.panel { display: none; }
+.panel.active { display: block; }
+.panel-header { margin-bottom: 20px; }
+.panel-header h2 { font-size: 18px; margin-bottom: 4px; }
+.panel-header p { color: var(--text2); font-size: 13px; }
+
+/* ─── Grid ─────── */
+.frame-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.frame-card {
+  background: var(--surface); border: 2px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; cursor: pointer;
+  transition: all 0.2s; position: relative;
+}
+.frame-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.frame-card.selected { border-color: var(--green); }
+.frame-card img { width: 100%; display: block; }
+.frame-card .meta {
+  padding: 8px 12px; font-size: 12px; color: var(--text2);
+  display: flex; justify-content: space-between;
+}
+.frame-card .check {
+  position: absolute; top: 8px; right: 8px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--border); display: flex; align-items: center;
+  justify-content: center; font-size: 14px;
+}
+.frame-card.selected .check { background: var(--green); color: white; }
+
+/* ─── Center Marker ─────── */
+.center-workspace {
+  display: flex; gap: 20px;
+}
+.center-frame-list {
+  width: 160px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 70vh; overflow-y: auto;
+}
+.center-thumb {
+  border: 2px solid var(--border); border-radius: 6px;
+  cursor: pointer; overflow: hidden; position: relative;
+}
+.center-thumb.active { border-color: var(--accent); }
+.center-thumb.marked { border-color: var(--green); }
+.center-thumb img { width: 100%; display: block; }
+.center-thumb .idx { position: absolute; top: 2px; left: 4px; font-size: 10px; color: white; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+
+.center-canvas-wrap {
+  flex: 1; position: relative; background: var(--surface);
+  border-radius: var(--radius); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.center-canvas-wrap img {
+  max-width: 100%; max-height: 70vh; cursor: crosshair; display: block;
+}
+.crosshair {
+  position: absolute; pointer-events: none;
+}
+.crosshair-h, .crosshair-v {
+  position: absolute; background: var(--red); opacity: 0.7;
+}
+.crosshair-h { height: 1px; width: 100%; left: 0; }
+.crosshair-v { width: 1px; height: 100%; top: 0; }
+.center-dot {
+  position: absolute; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--red); border: 2px solid white;
+  transform: translate(-50%, -50%); pointer-events: none;
+  box-shadow: 0 0 8px rgba(252,92,124,.5);
+}
+.center-info {
+  position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,.7);
+  padding: 6px 12px; border-radius: 6px; font-size: 12px;
+}
+
+/* ─── Crop Preview ─────── */
+.preset-bar {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.preset-btn {
+  padding: 8px 14px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); border-radius: 6px; cursor: pointer; font-size: 12px;
+  transition: all 0.2s;
+}
+.preset-btn:hover { border-color: var(--accent); }
+.preset-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+.crop-preview-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.crop-card {
+  background: var(--surface); border-radius: var(--radius);
+  overflow: hidden; border: 1px solid var(--border);
+}
+.crop-card img { width: 100%; display: block; }
+.crop-card .info { padding: 8px; font-size: 11px; color: var(--text2); }
+
+/* ─── Versions ─────── */
+.versions-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.version-group {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+}
+.version-group h3 { font-size: 14px; margin-bottom: 12px; color: var(--accent2); }
+.version-group .thumbs { display: flex; gap: 6px; overflow-x: auto; }
+.version-group .thumbs img { height: 120px; border-radius: 4px; }
+
+/* ─── Publish ─────── */
+.publish-section { max-width: 640px; }
+.export-options { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.export-row { display: flex; gap: 12px; align-items: center; }
+.export-row label { width: 120px; font-size: 13px; color: var(--text2); }
+.export-row select, .export-row input {
+  flex: 1; padding: 8px; background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+}
+.social-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.social-btn {
+  padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none; color: white; transition: opacity 0.2s;
+}
+.social-btn:hover { opacity: 0.85; }
+.social-btn.twitter { background: #1da1f2; }
+.social-btn.linkedin { background: #0077b5; }
+.social-btn.facebook { background: #4267b2; }
+.social-btn.reddit { background: #ff4500; }
+.social-btn.telegram { background: #0088cc; }
+
+/* ─── Buttons ─────── */
+.btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #6b4ce8; }
+.btn-success { background: var(--green); color: #111; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--accent); }
+.btn-group { display: flex; gap: 8px; margin-top: 16px; }
+
+/* ─── Upload zone ─────── */
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 48px; text-align: center; color: var(--text2);
+  cursor: pointer; transition: all 0.2s; margin-bottom: 20px;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent); background: rgba(124,92,252,.05);
+}
+.upload-zone h3 { margin-bottom: 8px; color: var(--text); }
+
+/* ─── Empty state ─────── */
+.empty-state { text-align: center; padding: 60px; color: var(--text2); }
+.empty-state h3 { color: var(--text); margin-bottom: 8px; }
+
+/* ─── Toast ─────── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--surface2); border: 1px solid var(--green);
+  padding: 12px 20px; border-radius: 8px; font-size: 13px;
+  transform: translateY(80px); opacity: 0; transition: all 0.3s;
+  z-index: 1000;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+/* ─── Spinner ─────── */
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>xen</span> capture</h1>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="session-info" id="sessionInfo">Brak sesji</span>
+    <select class="session-select" id="sessionSelect" onchange="loadSession(this.value)">
+      <option value="">— wybierz sesję —</option>
+    </select>
+  </div>
+</div>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-tab="select" onclick="switchTab('select')">
+    <span class="num">1</span>Wybór klatek
+  </div>
+  <div class="tab" data-tab="center" onclick="switchTab('center')">
+    <span class="num">2</span>Środek
+  </div>
+  <div class="tab" data-tab="crop" onclick="switchTab('crop')">
+    <span class="num">3</span>Przycinanie
+  </div>
+  <div class="tab" data-tab="versions" onclick="switchTab('versions')">
+    <span class="num">4</span>Wersje
+  </div>
+  <div class="tab" data-tab="publish" onclick="switchTab('publish')">
+    <span class="num">5</span>Publikacja
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- ═══ Tab 1: Frame Selection ═══ -->
+  <div class="panel active" id="panel-select">
+    <div class="panel-header">
+      <h2>Wybór klatek</h2>
+      <p>Kliknij aby zaznaczyć/odznaczyć klatki. Zaznaczone przejdą do dalszej edycji.</p>
+    </div>
+
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <h3>📸 Przeciągnij screenshoty lub kliknij aby wybrać</h3>
+      <p>Lub uruchom <code>xen capture</code> w terminalu</p>
+      <input type="file" id="fileInput" multiple accept="image/*" style="display:none" onchange="uploadFiles(this.files)">
+    </div>
+
+    <div id="frameGrid" class="frame-grid"></div>
+
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="selectAllFrames()">Zaznacz wszystkie</button>
+      <button class="btn btn-outline" onclick="deselectAllFrames()">Odznacz wszystkie</button>
+      <button class="btn btn-primary" onclick="saveSelection(); switchTab('center')">Dalej → Środek</button>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 2: Center Marking ═══ -->
+  <div class="panel" id="panel-center">
+    <div class="panel-header">
+      <h2>Oznacz środek</h2>
+      <p>Kliknij na obrazie aby wyznaczyć punkt centralny. 🔴 = kursor myszy z nagrania (sugestia).</p>
+    </div>
+    <div class="center-workspace">
+      <div class="center-frame-list" id="centerFrameList"></div>
+      <div class="center-canvas-wrap" id="centerCanvasWrap">
+        <img id="centerImage" src="" alt="">
+        <div class="crosshair-h" id="crossH" style="display:none"></div>
+        <div class="crosshair-v" id="crossV" style="display:none"></div>
+        <div class="center-dot" id="centerDot" style="display:none"></div>
+        <div class="center-info" id="centerInfo">Kliknij na obrazie</div>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="switchTab('select')">← Wstecz</button>
+      <button class="btn btn-outline" onclick="autoCenters()">Auto (kursor myszy)</button>
+      <button class="btn btn-primary" onclick="saveCenters(); switchTab('crop')">Dalej → Przycinanie</button>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 3: Crop Preview ═══ -->
+  <div class="panel" id="panel-crop">
+    <div class="panel-header">
+      <h2>Przycinanie</h2>
+      <p>Wybierz format docelowy — podgląd przyciętych klatek wg oznaczonego środka.</p>
+    </div>
+    <div class="preset-bar" id="presetBar"></div>
+    <div id="cropPreviewGrid" class="crop-preview-grid"></div>
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="switchTab('center')">← Wstecz</button>
+      <button class="btn btn-primary" onclick="switchTab('versions')">Dalej → Wersje</button>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 4: Multiple Versions ═══ -->
+  <div class="panel" id="panel-versions">
+    <div class="panel-header">
+      <h2>Porównanie wersji</h2>
+      <p>Podgląd wszystkich formatów obok siebie.</p>
+    </div>
+    <div class="preset-bar" id="versionPresetBar"></div>
+    <div class="btn-group" style="margin-bottom:16px">
+      <button class="btn btn-primary" onclick="generateVersions()">Generuj wybrane wersje</button>
+    </div>
+    <div id="versionsGrid" class="versions-grid"></div>
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="switchTab('crop')">← Wstecz</button>
+      <button class="btn btn-primary" onclick="switchTab('publish')">Dalej → Publikacja</button>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 5: Publish ═══ -->
+  <div class="panel" id="panel-publish">
+    <div class="panel-header">
+      <h2>Eksport i publikacja</h2>
+      <p>Eksportuj jako wideo, GIF lub paczkę PNG, i udostępnij.</p>
+    </div>
+    <div class="publish-section">
+      <div class="export-options">
+        <div class="export-row">
+          <label>Format:</label>
+          <select id="exportPreset">
+            <option value="">Ładowanie...</option>
+          </select>
+        </div>
+        <div class="export-row">
+          <label>Typ:</label>
+          <select id="exportFormat">
+            <option value="video">MP4 Video</option>
+            <option value="gif">GIF</option>
+            <option value="zip">ZIP (obrazy)</option>
+          </select>
+        </div>
+        <div class="export-row">
+          <label>Czas/klatka:</label>
+          <input type="number" id="exportDuration" value="2.0" min="0.5" max="10" step="0.5"> s
+        </div>
+        <div class="export-row">
+          <label>FPS:</label>
+          <input type="number" id="exportFps" value="30" min="10" max="60">
+        </div>
+      </div>
+
+      <button class="btn btn-success" onclick="exportSession()" id="exportBtn">
+        📦 Eksportuj
+      </button>
+
+      <div id="exportResult" style="margin-top:16px;display:none;">
+        <a id="exportLink" class="btn btn-primary" href="#" download>⬇ Pobierz</a>
+      </div>
+
+      <h3 style="margin-top:32px; font-size:15px;">Udostępnij</h3>
+      <div class="social-links" id="socialLinks"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let currentSession = null;
+let sessionData = null;
+let selectedFrames = new Set();
+let centerMarks = {};  // frameIndex -> {x, y}
+let currentCenterFrame = 0;
+let activePreset = 'twitter_post';
+let presets = {};
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadSessions();
+  await loadPresets();
+  setupDragDrop();
+  setupCenterCanvas();
+  buildSocialLinks();
+});
+
+async function api(path, opts = {}) {
+  const res = await fetch('/api' + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+// ─── Sessions ───────────────────────────────────────────────────────────────
+async function loadSessions() {
+  const sessions = await api('/sessions');
+  const sel = document.getElementById('sessionSelect');
+  sel.innerHTML = '<option value="">— wybierz sesję —</option>';
+  sessions.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = `${s.name} (${s.frame_count} kl.)`;
+    sel.appendChild(opt);
+  });
+  if (sessions.length > 0) {
+    sel.value = sessions[0].name;
+    loadSession(sessions[0].name);
+  }
+}
+
+async function loadSession(name) {
+  if (!name) return;
+  currentSession = name;
+  sessionData = await api(`/sessions/${name}`);
+  document.getElementById('sessionInfo').textContent =
+    `${sessionData.frame_count} klatek • ${sessionData.duration.toFixed(1)}s`;
+
+  // Załaduj zaznaczenie
+  const prev = sessionData.selected_frames;
+  selectedFrames = new Set(prev || sessionData.frames.map((_, i) => i));
+
+  // Załaduj centra
+  centerMarks = {};
+  const cc = sessionData.custom_centers || {};
+  for (const [k, v] of Object.entries(cc)) {
+    centerMarks[parseInt(k)] = v;
+  }
+
+  renderFrameGrid();
+}
+
+// ─── Tab 1: Frame Selection ─────────────────────────────────────────────────
+function renderFrameGrid() {
+  const grid = document.getElementById('frameGrid');
+  grid.innerHTML = '';
+  if (!sessionData) return;
+
+  sessionData.frames.forEach((f, i) => {
+    const card = document.createElement('div');
+    card.className = `frame-card${selectedFrames.has(i) ? ' selected' : ''}`;
+    card.onclick = () => toggleFrame(i, card);
+    card.innerHTML = `
+      <img src="/api/sessions/${currentSession}/frames/${f.filename}" loading="lazy">
+      <div class="check">${selectedFrames.has(i) ? '✓' : ''}</div>
+      <div class="meta">
+        <span>#${i+1} • ${f.timestamp.toFixed(1)}s</span>
+        <span>Δ${f.change_pct.toFixed(0)}% • 🖱(${f.mouse_x},${f.mouse_y})</span>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function toggleFrame(idx, card) {
+  if (selectedFrames.has(idx)) {
+    selectedFrames.delete(idx);
+    card.classList.remove('selected');
+    card.querySelector('.check').textContent = '';
+  } else {
+    selectedFrames.add(idx);
+    card.classList.add('selected');
+    card.querySelector('.check').textContent = '✓';
+  }
+}
+
+function selectAllFrames() {
+  sessionData.frames.forEach((_, i) => selectedFrames.add(i));
+  renderFrameGrid();
+}
+
+function deselectAllFrames() {
+  selectedFrames.clear();
+  renderFrameGrid();
+}
+
+async function saveSelection() {
+  if (!currentSession) return;
+  await api(`/sessions/${currentSession}/select`, {
+    method: 'POST',
+    body: { selected_indices: [...selectedFrames].sort() },
+  });
+  toast('Zapisano wybór klatek');
+}
+
+// ─── Tab 2: Center Marking ──────────────────────────────────────────────────
+function setupCenterCanvas() {
+  const wrap = document.getElementById('centerCanvasWrap');
+  const img = document.getElementById('centerImage');
+
+  img.addEventListener('click', (e) => {
+    const rect = img.getBoundingClientRect();
+    const scaleX = img.naturalWidth / rect.width;
+    const scaleY = img.naturalHeight / rect.height;
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+    setCenter(currentCenterFrame, x, y);
+  });
+
+  img.addEventListener('mousemove', (e) => {
+    const rect = img.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    document.getElementById('crossH').style.cssText = `display:block;top:${py + rect.top - wrap.getBoundingClientRect().top}px`;
+    document.getElementById('crossV').style.cssText = `display:block;left:${px + rect.left - wrap.getBoundingClientRect().left}px`;
+  });
+}
+
+function renderCenterPanel() {
+  if (!sessionData) return;
+  const list = document.getElementById('centerFrameList');
+  list.innerHTML = '';
+  const selected = [...selectedFrames].sort();
+
+  selected.forEach((idx, i) => {
+    const f = sessionData.frames[idx];
+    const thumb = document.createElement('div');
+    const isMarked = centerMarks[idx] != null;
+    thumb.className = `center-thumb${i === 0 ? ' active' : ''}${isMarked ? ' marked' : ''}`;
+    thumb.onclick = () => showCenterFrame(idx);
+    thumb.innerHTML = `
+      <img src="/api/sessions/${currentSession}/frames/${f.filename}">
+      <span class="idx">#${idx+1} ${isMarked ? '✓' : ''}</span>
+    `;
+    list.appendChild(thumb);
+  });
+
+  if (selected.length > 0) showCenterFrame(selected[0]);
+}
+
+function showCenterFrame(idx) {
+  currentCenterFrame = idx;
+  const f = sessionData.frames[idx];
+  const img = document.getElementById('centerImage');
+  img.src = `/api/sessions/${currentSession}/frames/${f.filename}`;
+
+  // Pokaż zaznaczony środek lub sugestię
+  const center = centerMarks[idx] || {
+    x: f.suggested_center_x,
+    y: f.suggested_center_y,
+  };
+  img.onload = () => updateCenterDot(center.x, center.y);
+
+  // Podświetl thumb
+  document.querySelectorAll('.center-thumb').forEach(t => t.classList.remove('active'));
+  const thumbs = document.querySelectorAll('.center-thumb');
+  const selected = [...selectedFrames].sort();
+  const thumbIdx = selected.indexOf(idx);
+  if (thumbIdx >= 0 && thumbs[thumbIdx]) thumbs[thumbIdx].classList.add('active');
+
+  document.getElementById('centerInfo').textContent =
+    centerMarks[idx]
+      ? `Środek: (${center.x}, ${center.y})`
+      : `Sugestia (kursor): (${center.x}, ${center.y}) — kliknij aby ustawić`;
+}
+
+function setCenter(idx, x, y) {
+  centerMarks[idx] = { x, y };
+  updateCenterDot(x, y);
+  document.getElementById('centerInfo').textContent = `Środek: (${x}, ${y})`;
+
+  // Update thumb
+  const thumbs = document.querySelectorAll('.center-thumb');
+  const selected = [...selectedFrames].sort();
+  const thumbIdx = selected.indexOf(idx);
+  if (thumbIdx >= 0 && thumbs[thumbIdx]) {
+    thumbs[thumbIdx].classList.add('marked');
+    thumbs[thumbIdx].querySelector('.idx').textContent = `#${idx+1} ✓`;
+  }
+
+  toast(`Środek klatki #${idx+1}: (${x}, ${y})`);
+}
+
+function updateCenterDot(cx, cy) {
+  const img = document.getElementById('centerImage');
+  const dot = document.getElementById('centerDot');
+  const rect = img.getBoundingClientRect();
+  const wrap = document.getElementById('centerCanvasWrap').getBoundingClientRect();
+
+  const px = (cx / img.naturalWidth) * rect.width + (rect.left - wrap.left);
+  const py = (cy / img.naturalHeight) * rect.height + (rect.top - wrap.top);
+
+  dot.style.display = 'block';
+  dot.style.left = px + 'px';
+  dot.style.top = py + 'px';
+}
+
+function autoCenters() {
+  [...selectedFrames].forEach(idx => {
+    const f = sessionData.frames[idx];
+    if (!centerMarks[idx]) {
+      centerMarks[idx] = {
+        x: f.suggested_center_x || f.mouse_x || Math.round(f.width / 2),
+        y: f.suggested_center_y || f.mouse_y || Math.round(f.height / 2),
+      };
+    }
+  });
+  renderCenterPanel();
+  toast('Auto-środki ustawione na pozycji kursora');
+}
+
+async function saveCenters() {
+  if (!currentSession) return;
+  const marks = Object.entries(centerMarks).map(([k, v]) => ({
+    frame_index: parseInt(k), center_x: v.x, center_y: v.y,
+  }));
+  await api(`/sessions/${currentSession}/centers`, {
+    method: 'POST',
+    body: { marks },
+  });
+  toast('Zapisano środki');
+}
+
+// ─── Tab 3: Crop Preview ────────────────────────────────────────────────────
+async function loadPresets() {
+  presets = await api('/presets');
+  renderPresetBars();
+  populateExportPreset();
+}
+
+function renderPresetBars() {
+  ['presetBar', 'versionPresetBar'].forEach(id => {
+    const bar = document.getElementById(id);
+    bar.innerHTML = '';
+    for (const [key, p] of Object.entries(presets)) {
+      const btn = document.createElement('button');
+      btn.className = `preset-btn${key === activePreset ? ' active' : ''}`;
+      btn.textContent = p.label;
+      btn.dataset.preset = key;
+      if (id === 'presetBar') {
+        btn.onclick = () => { activePreset = key; updatePresetBtns(); loadCropPreview(); };
+      } else {
+        btn.onclick = () => btn.classList.toggle('active');
+      }
+      bar.appendChild(btn);
+    }
+  });
+}
+
+function updatePresetBtns() {
+  document.querySelectorAll('#presetBar .preset-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.preset === activePreset);
+  });
+}
+
+async function loadCropPreview() {
+  if (!currentSession) return;
+  const grid = document.getElementById('cropPreviewGrid');
+  grid.innerHTML = '<div class="spinner"></div>';
+
+  const result = await api(`/sessions/${currentSession}/crop-preview`, {
+    method: 'POST',
+    body: {
+      preset: activePreset,
+      frame_indices: [...selectedFrames].sort(),
+    },
+  });
+
+  grid.innerHTML = '';
+  result.previews.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'crop-card';
+    card.innerHTML = `
+      <img src="/api/sessions/${currentSession}/preview/${p.filename}" loading="lazy">
+      <div class="info">
+        Klatka #${p.index+1} • środek: (${p.center.x}, ${p.center.y}) • ${p.target.w}×${p.target.h}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ─── Tab 4: Versions ────────────────────────────────────────────────────────
+async function generateVersions() {
+  if (!currentSession) return;
+  const selected = [];
+  document.querySelectorAll('#versionPresetBar .preset-btn.active').forEach(b => {
+    selected.push(b.dataset.preset);
+  });
+  if (selected.length === 0) { toast('Zaznacz przynajmniej jeden format'); return; }
+
+  const grid = document.getElementById('versionsGrid');
+  grid.innerHTML = '<div class="spinner"></div>';
+
+  const result = await api(`/sessions/${currentSession}/generate-versions`, {
+    method: 'POST',
+    body: { presets: selected, frame_indices: [...selectedFrames].sort() },
+  });
+
+  grid.innerHTML = '';
+  for (const [key, ver] of Object.entries(result)) {
+    const group = document.createElement('div');
+    group.className = 'version-group';
+    let thumbsHtml = ver.previews.map(p =>
+      `<img src="/api/sessions/${currentSession}/preview/${p.filename}" title="Klatka #${p.index+1}">`
+    ).join('');
+    group.innerHTML = `
+      <h3>${ver.label} (${ver.target.w}×${ver.target.h})</h3>
+      <div class="thumbs">${thumbsHtml}</div>
+    `;
+    grid.appendChild(group);
+  }
+}
+
+// ─── Tab 5: Publish ─────────────────────────────────────────────────────────
+function populateExportPreset() {
+  const sel = document.getElementById('exportPreset');
+  sel.innerHTML = '';
+  for (const [key, p] of Object.entries(presets)) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = p.label;
+    sel.appendChild(opt);
+  }
+}
+
+async function exportSession() {
+  if (!currentSession) return;
+  const btn = document.getElementById('exportBtn');
+  btn.innerHTML = '<span class="spinner"></span> Eksportuję...';
+  btn.disabled = true;
+
+  try {
+    const result = await api(`/sessions/${currentSession}/export`, {
+      method: 'POST',
+      body: {
+        preset: document.getElementById('exportPreset').value,
+        format: document.getElementById('exportFormat').value,
+        duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
+        fps: parseInt(document.getElementById('exportFps').value),
+        frame_indices: [...selectedFrames].sort(),
+      },
+    });
+
+    document.getElementById('exportResult').style.display = 'block';
+    const link = document.getElementById('exportLink');
+    link.href = result.download_url;
+    link.textContent = `⬇ Pobierz ${result.filename} (${result.size_mb} MB)`;
+    toast('Eksport gotowy!');
+  } catch (e) {
+    toast('Błąd eksportu: ' + e.message);
+  } finally {
+    btn.innerHTML = '📦 Eksportuj';
+    btn.disabled = false;
+  }
+}
+
+function buildSocialLinks() {
+  const container = document.getElementById('socialLinks');
+  const links = {
+    twitter: { label: 'Twitter / X', class: 'twitter' },
+    linkedin: { label: 'LinkedIn', class: 'linkedin' },
+    facebook: { label: 'Facebook', class: 'facebook' },
+    reddit: { label: 'Reddit', class: 'reddit' },
+    telegram: { label: 'Telegram', class: 'telegram' },
+  };
+  for (const [key, cfg] of Object.entries(links)) {
+    const btn = document.createElement('button');
+    btn.className = `social-btn ${cfg.class}`;
+    btn.textContent = cfg.label;
+    btn.onclick = () => {
+      const text = encodeURIComponent(`Check out this demo!`);
+      const url = encodeURIComponent(window.location.href);
+      // Will be populated from social links API
+      window.open(`https://${key}.com`, '_blank');
+    };
+    container.appendChild(btn);
+  }
+}
+
+// ─── Upload ─────────────────────────────────────────────────────────────────
+function setupDragDrop() {
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    uploadFiles(e.dataTransfer.files);
+  });
+}
+
+async function uploadFiles(files) {
+  if (!files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+
+  const res = await fetch('/api/sessions/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+
+  toast(`Załadowano ${data.frame_count} obrazów`);
+  await loadSessions();
+  document.getElementById('sessionSelect').value = data.name;
+  await loadSession(data.name);
+}
+
+// ─── Tab Switching ──────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+
+  // Lazy load tab content
+  if (name === 'center') renderCenterPanel();
+  if (name === 'crop') loadCropPreview();
+}
+
+// ─── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>

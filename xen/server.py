@@ -1,0 +1,425 @@
+"""FastAPI server for xen web editor."""
+
+import json
+import io
+import subprocess
+import shutil
+from pathlib import Path
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from xen.config import get_data_dir, CROP_PRESETS, SOCIAL_LINKS
+
+app = FastAPI(title="xen", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files
+_static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+
+def data_dir() -> Path:
+    return get_data_dir()
+
+
+# ─── API: Sessions ───────────────────────────────────────────────────────────
+
+@app.get("/api/sessions")
+async def list_sessions():
+    """Lista wszystkich sesji nagrywania."""
+    sessions_dir = data_dir() / "sessions"
+    if not sessions_dir.exists():
+        return []
+    results = []
+    for s in sorted(sessions_dir.iterdir(), reverse=True):
+        meta_file = s / "session.json"
+        if meta_file.exists():
+            meta = json.loads(meta_file.read_text())
+            results.append({
+                "name": meta.get("name", s.name),
+                "created_at": meta.get("created_at", ""),
+                "frame_count": meta.get("frame_count", 0),
+                "duration": meta.get("duration", 0),
+            })
+    return results
+
+
+@app.get("/api/sessions/{name}")
+async def get_session(name: str):
+    """Pobierz szczegóły sesji."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404, "Session not found")
+    return json.loads(meta_file.read_text())
+
+
+@app.get("/api/sessions/{name}/frames/{filename}")
+async def get_frame_image(name: str, filename: str):
+    """Zwróć obraz klatki."""
+    filepath = data_dir() / "sessions" / name / "frames" / filename
+    if not filepath.exists():
+        raise HTTPException(404, "Frame not found")
+    return FileResponse(filepath, media_type="image/png")
+
+
+@app.delete("/api/sessions/{name}")
+async def delete_session(name: str):
+    """Usuń sesję."""
+    session_dir = data_dir() / "sessions" / name
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+    return {"ok": True}
+
+
+# ─── API: Upload external screenshots ────────────────────────────────────────
+
+@app.post("/api/sessions/upload")
+async def upload_screenshots(files: list[UploadFile] = File(...)):
+    """Upload zewnętrznych screenshotów jako nowa sesja."""
+    from PIL import Image
+
+    name = datetime.now().strftime("upload_%Y%m%d_%H%M%S")
+    session_dir = data_dir() / "sessions" / name
+    session_dir.mkdir(parents=True, exist_ok=True)
+    (session_dir / "frames").mkdir(exist_ok=True)
+
+    frames = []
+    for i, f in enumerate(sorted(files, key=lambda x: x.filename)):
+        content = await f.read()
+        img = Image.open(io.BytesIO(content))
+        filename = f"frame_{i:04d}.png"
+        img.save(session_dir / "frames" / filename, "PNG")
+        frames.append({
+            "index": i,
+            "timestamp": i * 1.0,
+            "filename": filename,
+            "width": img.width,
+            "height": img.height,
+            "change_pct": 100.0 if i == 0 else 0.0,
+            "mouse_x": img.width // 2,
+            "mouse_y": img.height // 2,
+            "suggested_center_x": img.width // 2,
+            "suggested_center_y": img.height // 2,
+            "input_events": [],
+        })
+
+    meta = {
+        "name": name,
+        "created_at": datetime.utcnow().isoformat(),
+        "duration": len(frames),
+        "frame_count": len(frames),
+        "settings": {"source": "upload"},
+        "frames": frames,
+        "input_log": [],
+    }
+    (session_dir / "session.json").write_text(json.dumps(meta, indent=2))
+    return {"name": name, "frame_count": len(frames)}
+
+
+# ─── API: Tab 1 - Frame Selection ────────────────────────────────────────────
+
+class FrameSelection(BaseModel):
+    selected_indices: list[int]
+
+
+@app.post("/api/sessions/{name}/select")
+async def save_frame_selection(name: str, selection: FrameSelection):
+    """Zapisz wybór klatek."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+    meta = json.loads(meta_file.read_text())
+    meta["selected_frames"] = selection.selected_indices
+    meta_file.write_text(json.dumps(meta, indent=2))
+    return {"ok": True, "selected": len(selection.selected_indices)}
+
+
+# ─── API: Tab 2 - Center Marking ─────────────────────────────────────────────
+
+class CenterMark(BaseModel):
+    frame_index: int
+    center_x: int
+    center_y: int
+
+
+class CenterMarks(BaseModel):
+    marks: list[CenterMark]
+
+
+@app.post("/api/sessions/{name}/centers")
+async def save_centers(name: str, marks: CenterMarks):
+    """Zapisz oznaczenia środków."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+    meta = json.loads(meta_file.read_text())
+    centers = {}
+    for m in marks.marks:
+        centers[str(m.frame_index)] = {"x": m.center_x, "y": m.center_y}
+    meta["custom_centers"] = centers
+    meta_file.write_text(json.dumps(meta, indent=2))
+    return {"ok": True}
+
+
+# ─── API: Tab 3 - Crop & Generate ────────────────────────────────────────────
+
+@app.get("/api/presets")
+async def get_crop_presets():
+    """Lista presetów przycinania."""
+    return CROP_PRESETS
+
+
+class CropRequest(BaseModel):
+    preset: str | None = None
+    custom_w: int | None = None
+    custom_h: int | None = None
+    frame_indices: list[int] | None = None  # None = wszystkie zaznaczone
+
+
+@app.post("/api/sessions/{name}/crop-preview")
+async def crop_preview(name: str, req: CropRequest):
+    """Generuj podgląd przyciętych klatek."""
+    from PIL import Image
+
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+    meta = json.loads(meta_file.read_text())
+
+    # Rozmiar docelowy
+    if req.preset and req.preset in CROP_PRESETS:
+        target_w = CROP_PRESETS[req.preset]["w"]
+        target_h = CROP_PRESETS[req.preset]["h"]
+    elif req.custom_w and req.custom_h:
+        target_w = req.custom_w
+        target_h = req.custom_h
+    else:
+        target_w, target_h = 1920, 1080
+
+    # Które klatki
+    selected = req.frame_indices or meta.get("selected_frames", list(range(meta["frame_count"])))
+    custom_centers = meta.get("custom_centers", {})
+    frames = meta.get("frames", [])
+
+    preview_dir = data_dir() / "sessions" / name / "preview"
+    preview_dir.mkdir(exist_ok=True)
+
+    results = []
+    for idx in selected:
+        if idx >= len(frames):
+            continue
+        frame = frames[idx]
+        filepath = data_dir() / "sessions" / name / "frames" / frame["filename"]
+        if not filepath.exists():
+            continue
+
+        img = Image.open(filepath)
+        iw, ih = img.size
+
+        # Środek z custom lub suggested
+        center = custom_centers.get(str(idx))
+        if center:
+            cx, cy = center["x"], center["y"]
+        else:
+            cx = frame.get("suggested_center_x", iw // 2)
+            cy = frame.get("suggested_center_y", ih // 2)
+
+        # Oblicz region przycinania z zachowaniem aspect ratio targetu
+        aspect = target_w / target_h
+
+        # Spróbuj zmieścić jak największy box o danym aspect ratio
+        if iw / ih > aspect:
+            # Obraz szerszy — ograniczamy wysokością
+            crop_h = ih
+            crop_w = int(ih * aspect)
+        else:
+            # Obraz wyższy — ograniczamy szerokością
+            crop_w = iw
+            crop_h = int(iw / aspect)
+
+        # Wyśrodkuj na oznaczonym punkcie
+        left = max(0, min(cx - crop_w // 2, iw - crop_w))
+        top = max(0, min(cy - crop_h // 2, ih - crop_h))
+
+        cropped = img.crop((left, top, left + crop_w, top + crop_h))
+        cropped = cropped.resize((target_w, target_h), Image.LANCZOS)
+
+        preview_name = f"crop_{idx:04d}_{target_w}x{target_h}.png"
+        cropped.save(preview_dir / preview_name, "PNG")
+
+        results.append({
+            "index": idx,
+            "filename": preview_name,
+            "crop": {"left": left, "top": top, "w": crop_w, "h": crop_h},
+            "center": {"x": cx, "y": cy},
+            "target": {"w": target_w, "h": target_h},
+        })
+
+    return {"previews": results, "target": {"w": target_w, "h": target_h}}
+
+
+@app.get("/api/sessions/{name}/preview/{filename}")
+async def get_preview_image(name: str, filename: str):
+    filepath = data_dir() / "sessions" / name / "preview" / filename
+    if not filepath.exists():
+        raise HTTPException(404)
+    return FileResponse(filepath, media_type="image/png")
+
+
+# ─── API: Tab 4 - Multi-version generation ───────────────────────────────────
+
+class MultiVersionRequest(BaseModel):
+    presets: list[str]
+    frame_indices: list[int] | None = None
+
+
+@app.post("/api/sessions/{name}/generate-versions")
+async def generate_versions(name: str, req: MultiVersionRequest):
+    """Generuj wiele wersji (presetów) naraz."""
+    results = {}
+    for preset in req.presets:
+        if preset not in CROP_PRESETS:
+            continue
+        crop_req = CropRequest(preset=preset, frame_indices=req.frame_indices)
+        preview = await crop_preview(name, crop_req)
+        results[preset] = {
+            "label": CROP_PRESETS[preset]["label"],
+            "previews": preview["previews"],
+            "target": preview["target"],
+        }
+    return results
+
+
+# ─── API: Tab 5 - Export & Publish ────────────────────────────────────────────
+
+class ExportRequest(BaseModel):
+    preset: str
+    frame_indices: list[int] | None = None
+    format: str = "video"  # "video" | "gif" | "zip"
+    duration_per_frame: float = 2.0
+    transition: float = 0.3
+    fps: int = 30
+
+
+@app.post("/api/sessions/{name}/export")
+async def export_session(name: str, req: ExportRequest):
+    """Eksportuj jako wideo, GIF lub ZIP."""
+    from PIL import Image
+
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+
+    # Najpierw generuj przycięte klatki
+    crop_req = CropRequest(preset=req.preset, frame_indices=req.frame_indices)
+    crop_result = await crop_preview(name, crop_req)
+
+    preview_dir = data_dir() / "sessions" / name / "preview"
+    export_dir = data_dir() / "exports"
+    export_dir.mkdir(exist_ok=True)
+
+    preset_info = CROP_PRESETS.get(req.preset, {"w": 1920, "h": 1080})
+    tw, th = preset_info["w"], preset_info["h"]
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if req.format == "gif":
+        # Generuj GIF
+        output_name = f"{name}_{req.preset}_{timestamp}.gif"
+        output_path = export_dir / output_name
+        images = []
+        for p in crop_result["previews"]:
+            img = Image.open(preview_dir / p["filename"])
+            images.append(img)
+        if images:
+            images[0].save(
+                output_path, save_all=True, append_images=images[1:],
+                duration=int(req.duration_per_frame * 1000), loop=0, optimize=True,
+            )
+
+    elif req.format == "zip":
+        output_name = f"{name}_{req.preset}_{timestamp}.zip"
+        output_path = export_dir / output_name
+        import zipfile
+        with zipfile.ZipFile(output_path, 'w') as zf:
+            for p in crop_result["previews"]:
+                fpath = preview_dir / p["filename"]
+                zf.write(fpath, p["filename"])
+
+    else:  # video
+        output_name = f"{name}_{req.preset}_{timestamp}.mp4"
+        output_path = export_dir / output_name
+
+        # Użyj ffmpeg do złożenia wideo
+        import tempfile
+        with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as f:
+            for p in crop_result["previews"]:
+                fpath = preview_dir / p["filename"]
+                f.write(f"file '{fpath}'\n")
+                f.write(f"duration {req.duration_per_frame}\n")
+            # Powtórz ostatni aby uniknąć obcięcia
+            if crop_result["previews"]:
+                last = preview_dir / crop_result["previews"][-1]["filename"]
+                f.write(f"file '{last}'\n")
+            list_file = f.name
+
+        try:
+            cmd = [
+                'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
+                '-i', list_file,
+                '-vf', f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', 'libx264', '-crf', '23', '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart', '-r', str(req.fps),
+                str(output_path),
+            ]
+            subprocess.run(cmd, capture_output=True, check=True)
+        except subprocess.CalledProcessError:
+            # Fallback: GIF jeśli ffmpeg nie dostępny
+            output_name = output_name.replace('.mp4', '.gif')
+            output_path = export_dir / output_name
+            images = [Image.open(preview_dir / p["filename"]) for p in crop_result["previews"]]
+            if images:
+                images[0].save(
+                    output_path, save_all=True, append_images=images[1:],
+                    duration=int(req.duration_per_frame * 1000), loop=0,
+                )
+        finally:
+            Path(list_file).unlink(missing_ok=True)
+
+    return {
+        "filename": output_name,
+        "size_mb": round(output_path.stat().st_size / (1024*1024), 2),
+        "download_url": f"/api/exports/{output_name}",
+    }
+
+
+@app.get("/api/exports/{filename}")
+async def download_export(filename: str):
+    filepath = data_dir() / "exports" / filename
+    if not filepath.exists():
+        raise HTTPException(404)
+    return FileResponse(filepath, filename=filename)
+
+
+@app.get("/api/social-links")
+async def get_social_links():
+    return SOCIAL_LINKS
+
+
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    template = Path(__file__).parent / "templates" / "index.html"
+    return HTMLResponse(template.read_text())

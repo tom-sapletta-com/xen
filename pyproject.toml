@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xen-capture"
+version = "0.1.1"
+description = "Screenshot capture → edit → crop → publish. One command: xen"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    {name = "Softreck", email = "info@softreck.com"},
+    "Tom Sapletta <tom@sapletta.com>",
+]
+keywords = ["screenshot", "video", "capture", "social-media", "screen-recording"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video :: Capture",
+]
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "mss>=9.0.0",
+    "Pillow>=10.0.0",
+    "pynput>=1.7.6",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.6",
+    "aiofiles>=23.0.0",
+    "numpy>=1.24.0",
+    "imagehash>=4.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.25",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+xen = "xen.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/softreck/xen"
+Repository = "https://github.com/softreck/xen"
+
+[tool.setuptools.packages.find]
+include = ["xen*"]
+
+[tool.setuptools.package-data]
+xen = ["static/**/*", "templates/**/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
