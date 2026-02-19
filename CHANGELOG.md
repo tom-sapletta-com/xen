@@ -1,3 +1,28 @@
+## [0.1.10] - 2026-02-19
+
+### Summary
+
+feat(build): CLI interface improvements
+
+### Build
+
+- update pyproject.toml
+
+### Other
+
+- build: update Makefile
+- deps: update package.json
+- update desktop/src-tauri/Cargo.toml
+- update desktop/src-tauri/build.rs
+- update desktop/src-tauri/src/main.rs
+- update desktop/src-tauri/tauri.conf.json
+- update desktop/test/xeen-desktop.test.js
+- update xeen/capture.py
+- update xeen/cli.py
+- update xeen/server.py
+- ... and 1 more
+
+
 ## [0.1.9] - 2026-02-19
 
 ### Summary

@@ -1,0 +1,19 @@
+[package]
+name = "xeen-desktop"
+version = "0.1.0"
+description = "xeen — Screenshot → Video desktop app"
+authors = ["Tom Sapletta"]
+license = "Apache-2.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1", features = [] }
+
+[dependencies]
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "1", features = ["shell-open-api"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

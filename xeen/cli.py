@@ -38,6 +38,12 @@ def main():
     srv.add_argument("--data-dir", type=str, default=None,
                      help="Katalog danych (domyślnie: ~/.xeen)")
 
+    # xeen desktop
+    desk = sub.add_parser("desktop", aliases=["d"], help="Uruchom jako aplikację desktopową (Tauri)")
+    desk.add_argument("-p", "--port", type=int, default=7600, help="Port serwera (domyślnie: 7600)")
+    desk.add_argument("--host", type=str, default="127.0.0.1", help="Host serwera")
+    desk.add_argument("--data-dir", type=str, default=None, help="Katalog danych")
+
     # xeen list
     sub.add_parser("list", aliases=["l"], help="Lista sesji nagrywania")
 
@@ -57,6 +63,8 @@ def main():
         run_capture(args)
     elif args.command in ("server", "s"):
         run_server(args)
+    elif args.command in ("desktop", "d"):
+        run_desktop(args)
     elif args.command in ("list", "l"):
         run_list(args)
     else:
@@ -158,6 +166,82 @@ def run_server(args):
         port=args.port,
         log_level="warning",
     )
+
+
+def run_desktop(args):
+    """Uruchom jako aplikację desktopową."""
+    import subprocess
+    from pathlib import Path
+    from xeen.config import get_data_dir
+
+    data_dir = args.data_dir or get_data_dir()
+    os.environ["XEEN_DATA_DIR"] = str(data_dir)
+
+    url = f"http://{args.host}:{args.port}"
+    desktop_dir = Path(__file__).parent.parent / "desktop"
+
+    # Start server in background
+    print(f"🖥️  xeen desktop → {url}")
+    print(f"   Dane: {data_dir}")
+
+    server_proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "xeen.server:app",
+         "--host", args.host, "--port", str(args.port), "--log-level", "warning"],
+        stdout=subprocess.DEVNULL,
+    )
+
+    # Wait for server
+    import socket
+    for _ in range(40):
+        try:
+            s = socket.create_connection((args.host, args.port), timeout=0.25)
+            s.close()
+            break
+        except OSError:
+            time.sleep(0.25)
+
+    try:
+        # Option 1: Tauri binary (pre-built)
+        tauri_bin = desktop_dir / "src-tauri" / "target" / "release" / "xeen-desktop"
+        if tauri_bin.exists():
+            print("   🚀 Uruchamianie Tauri...")
+            subprocess.run([str(tauri_bin)], check=True)
+            return
+
+        # Option 2: cargo tauri dev (if Rust/npm installed)
+        pkg_json = desktop_dir / "package.json"
+        if pkg_json.exists():
+            npm = "npm"
+            try:
+                subprocess.check_call([npm, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.check_call(["cargo", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print("   🚀 Uruchamianie Tauri dev...")
+                subprocess.run([npm, "run", "dev"], cwd=str(desktop_dir), check=True)
+                return
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                pass
+
+        # Option 3: Fallback to pywebview
+        try:
+            import webview
+            print("   🚀 Uruchamianie PyWebView (fallback)...")
+            webview.create_window('xeen', url, width=1400, height=900, min_size=(900, 600))
+            webview.start()
+            return
+        except ImportError:
+            pass
+
+        # Option 4: Just open browser
+        print("   ⚠️  Brak Tauri/PyWebView — otwieram przeglądarkę...")
+        print("      Zainstaluj: make install-desktop (Tauri) lub pip install pywebview (fallback)")
+        webbrowser.open(url)
+        server_proc.wait()
+
+    except KeyboardInterrupt:
+        print("\n⏹  Zamykanie...")
+    finally:
+        server_proc.terminate()
+        server_proc.wait(timeout=5)
 
 
 def run_list(args):

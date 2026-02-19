@@ -2,10 +2,14 @@
 
 import json
 import io
+import logging
 import subprocess
 import shutil
 from pathlib import Path
 from datetime import datetime
+from PIL import Image
+
+logger = logging.getLogger("xeen.server")
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
@@ -61,7 +65,18 @@ async def get_session(name: str):
     meta_file = data_dir() / "sessions" / name / "session.json"
     if not meta_file.exists():
         raise HTTPException(404, "Session not found")
-    return json.loads(meta_file.read_text())
+    meta = json.loads(meta_file.read_text())
+    frames_dir = data_dir() / "sessions" / name / "frames"
+    missing = []
+    for f in meta.get("frames", []):
+        fp = frames_dir / f["filename"]
+        if not fp.exists():
+            missing.append(f["filename"])
+    if missing:
+        logger.warning("Session %s: %d/%d frames missing on disk: %s",
+                       name, len(missing), len(meta.get("frames", [])), missing)
+        meta["_missing_frames"] = missing
+    return meta
 
 
 @app.get("/api/sessions/{name}/thumbnails")
@@ -129,12 +144,73 @@ async def delete_frame(name: str, filename: str):
     return {"ok": True}
 
 
+# ─── API: Frame Similarity ────────────────────────────────────────────────────
+
+@app.get("/api/sessions/{name}/similarity")
+async def get_frame_similarity(name: str, threshold: float = 90.0):
+    """Compute pairwise similarity between frames using perceptual hashing."""
+    import imagehash
+    from PIL import Image
+
+    session_dir = data_dir() / "sessions" / name
+    meta_file = session_dir / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404, "Session not found")
+
+    meta = json.loads(meta_file.read_text())
+    frames = meta.get("frames", [])
+    frames_dir = session_dir / "frames"
+
+    # Compute perceptual hashes
+    hashes = []
+    for f in frames:
+        fp = frames_dir / f["filename"]
+        if fp.exists():
+            try:
+                img = Image.open(fp)
+                h = imagehash.phash(img, hash_size=16)
+                hashes.append({"index": f["index"], "filename": f["filename"], "hash": str(h), "hash_obj": h})
+            except Exception as e:
+                logger.warning("Failed to hash frame %s: %s", f["filename"], e)
+                hashes.append({"index": f["index"], "filename": f["filename"], "hash": None, "hash_obj": None})
+        else:
+            hashes.append({"index": f["index"], "filename": f["filename"], "hash": None, "hash_obj": None})
+
+    # Pairwise comparison
+    max_hash_bits = 16 * 16  # hash_size=16 → 256 bits
+    duplicates = []   # list of (i, j, similarity%)
+    dup_indices = set()
+
+    for a_idx in range(len(hashes)):
+        for b_idx in range(a_idx + 1, len(hashes)):
+            ha = hashes[a_idx]["hash_obj"]
+            hb = hashes[b_idx]["hash_obj"]
+            if ha is None or hb is None:
+                continue
+            distance = ha - hb  # Hamming distance
+            similarity = round((1 - distance / max_hash_bits) * 100, 1)
+            if similarity >= threshold:
+                duplicates.append({
+                    "frame_a": hashes[a_idx]["index"],
+                    "frame_b": hashes[b_idx]["index"],
+                    "similarity": similarity,
+                })
+                dup_indices.add(hashes[b_idx]["index"])  # mark the later one
+
+    return {
+        "threshold": threshold,
+        "total_frames": len(frames),
+        "duplicate_pairs": duplicates,
+        "duplicate_indices": sorted(dup_indices),
+        "duplicate_count": len(dup_indices),
+    }
+
+
 # ─── API: Upload external screenshots ────────────────────────────────────────
 
 @app.post("/api/sessions/upload")
 async def upload_screenshots(files: list[UploadFile] = File(...)):
     """Upload zewnętrznych screenshotów jako nowa sesja."""
-    from PIL import Image
 
     name = datetime.now().strftime("upload_%Y%m%d_%H%M%S")
     session_dir = data_dir() / "sessions" / name
@@ -237,7 +313,6 @@ class CropRequest(BaseModel):
 @app.post("/api/sessions/{name}/crop-preview")
 async def crop_preview(name: str, req: CropRequest):
     """Generuj podgląd przyciętych klatek."""
-    from PIL import Image
 
     meta_file = data_dir() / "sessions" / name / "session.json"
     if not meta_file.exists():
@@ -353,16 +428,15 @@ async def generate_versions(name: str, req: MultiVersionRequest):
 class ExportRequest(BaseModel):
     preset: str
     frame_indices: list[int] | None = None
-    format: str = "video"  # "video" | "gif" | "zip"
+    format: str = "video"  # "video" | "gif" | "webm" | "zip"
     duration_per_frame: float = 2.0
     transition: float = 0.3
-    fps: int = 30
+    fps: int = 2
 
 
 @app.post("/api/sessions/{name}/export")
 async def export_session(name: str, req: ExportRequest):
-    """Eksportuj jako wideo, GIF lub ZIP."""
-    from PIL import Image
+    """Eksportuj jako wideo, GIF, WebM lub ZIP."""
 
     meta_file = data_dir() / "sessions" / name / "session.json"
     if not meta_file.exists():
@@ -394,6 +468,47 @@ async def export_session(name: str, req: ExportRequest):
                 output_path, save_all=True, append_images=images[1:],
                 duration=int(req.duration_per_frame * 1000), loop=0, optimize=True,
             )
+
+    elif req.format == "webm":
+        # Generuj WebM
+        output_name = f"{name}_{req.preset}_{timestamp}.webm"
+        output_path = export_dir / output_name
+
+        # Użyj ffmpeg do złożenia WebM
+        import tempfile
+        with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as f:
+            for p in crop_result["previews"]:
+                fpath = preview_dir / p["filename"]
+                f.write(f"file '{fpath}'\n")
+                f.write(f"duration {req.duration_per_frame}\n")
+            # Powtórz ostatni aby uniknąć obcięcia
+            if crop_result["previews"]:
+                last = preview_dir / crop_result["previews"][-1]["filename"]
+                f.write(f"file '{last}'\n")
+            list_file = f.name
+
+        try:
+            cmd = [
+                'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
+                '-i', list_file,
+                '-vf', f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '1M',
+                '-r', str(req.fps),
+                str(output_path),
+            ]
+            subprocess.run(cmd, capture_output=True, check=True)
+        except subprocess.CalledProcessError:
+            # Fallback: GIF jeśli ffmpeg nie dostępny
+            output_name = output_name.replace('.webm', '.gif')
+            output_path = export_dir / output_name
+            images = [Image.open(preview_dir / p["filename"]) for p in crop_result["previews"]]
+            if images:
+                images[0].save(
+                    output_path, save_all=True, append_images=images[1:],
+                    duration=int(req.duration_per_frame * 1000), loop=0,
+                )
+        finally:
+            Path(list_file).unlink(missing_ok=True)
 
     elif req.format == "zip":
         output_name = f"{name}_{req.preset}_{timestamp}.zip"

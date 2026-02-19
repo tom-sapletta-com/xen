@@ -5,6 +5,8 @@ mss → Pillow → system tools → browser Screen Capture API
 """
 
 import json
+import subprocess
+import sys
 import time
 import threading
 from datetime import datetime, timezone
@@ -16,6 +18,27 @@ from PIL import Image
 
 from xeen.config import get_data_dir
 from xeen.capture_backends import detect_backend, BrowserCaptureNeeded, CaptureBackend
+
+
+def _ensure_package(pip_name: str, import_name: str | None = None) -> bool:
+    """Try to import a package; auto-install via pip if missing. Returns True on success."""
+    import_name = import_name or pip_name
+    try:
+        __import__(import_name)
+        return True
+    except ImportError:
+        print(f"  📦  Brak '{pip_name}' — instaluję automatycznie...")
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "--quiet", pip_name],
+                stdout=subprocess.DEVNULL,
+            )
+            __import__(import_name)
+            print(f"  ✅  '{pip_name}' zainstalowany pomyślnie")
+            return True
+        except Exception as e:
+            print(f"  ❌  Nie udało się zainstalować '{pip_name}': {e}")
+            return False
 
 
 @dataclass
@@ -43,6 +66,9 @@ class FrameMeta:
     suggested_center_x: int = 0  # wstępny środek na podstawie kursora
     suggested_center_y: int = 0
     input_events: list = field(default_factory=list)
+    ocr_text: str = ""           # tekst wyekstrahowany przez OCR
+    ocr_words: int = 0           # liczba słów
+    ocr_available: bool = False  # czy tesseract był dostępny
 
 
 class InputTracker:
@@ -159,6 +185,126 @@ class InputTracker:
         return self.current_mouse_x, self.current_mouse_y
 
 
+def analyze_frame(arr: np.ndarray) -> dict:
+    """Analyze image quality. Returns dict with flags and stats."""
+    # Work on grayscale for most checks
+    if arr.ndim == 3:
+        gray = arr.mean(axis=2).astype(np.float32)  # shape (H, W)
+    else:
+        gray = arr.astype(np.float32)
+
+    mean_brightness = float(gray.mean())
+    std_brightness  = float(gray.std())
+
+    # Per-channel stats (for color uniformity)
+    if arr.ndim == 3:
+        ch_means = arr.mean(axis=(0, 1))   # [R, G, B]
+        ch_stds  = arr.std(axis=(0, 1))    # std per channel
+    else:
+        ch_means = np.array([mean_brightness])
+        ch_stds  = np.array([std_brightness])
+
+    # Thresholds
+    BLACK_THRESH      = 15    # mean brightness below → black frame
+    WHITE_THRESH      = 240   # mean brightness above → white frame
+    UNIFORM_STD       = 8     # global std below → uniform/solid color
+    CHANNEL_STD       = 10    # ALL per-channel stds below → solid color (any hue)
+    LOW_CONTRAST_STD  = 20    # std below → very low contrast
+
+    is_black   = mean_brightness < BLACK_THRESH
+    is_white   = mean_brightness > WHITE_THRESH
+    # Uniform: either global std is tiny, OR every channel is individually flat
+    # (catches solid red/green/blue/any-hue that might have moderate global std)
+    is_uniform = (std_brightness < UNIFORM_STD) or bool(np.all(ch_stds < CHANNEL_STD))
+    is_low_contrast = std_brightness < LOW_CONTRAST_STD
+
+    # Rough blur estimate: variance of Laplacian (downsampled)
+    step = max(1, gray.shape[0] // 200)
+    g = gray[::step, ::step]
+    lap = (np.roll(g, 1, 0) + np.roll(g, -1, 0) +
+           np.roll(g, 1, 1) + np.roll(g, -1, 1) - 4 * g)
+    blur_score = float(lap.var())   # higher = sharper
+
+    # Histogram: % of pixels that are near-black or near-white
+    flat = gray.flatten()
+    pct_black_pixels = float((flat < 20).mean() * 100)
+    pct_white_pixels = float((flat > 235).mean() * 100)
+
+    # Dominant-color reason string for logging
+    if is_black:
+        reason = "czarna"
+    elif is_white:
+        reason = "biała"
+    elif is_uniform:
+        reason = f"jednolity kolor (ch_stds={[round(float(v),1) for v in ch_stds]})"
+    else:
+        reason = ""
+
+    return {
+        "mean":             round(mean_brightness, 1),
+        "std":              round(std_brightness, 1),
+        "blur_score":       round(blur_score, 1),
+        "pct_black_pixels": round(pct_black_pixels, 1),
+        "pct_white_pixels": round(pct_white_pixels, 1),
+        "ch_means":         [round(float(v), 1) for v in ch_means],
+        "ch_stds":          [round(float(v), 1) for v in ch_stds],
+        "is_black":         is_black,
+        "is_white":         is_white,
+        "is_uniform":       is_uniform,
+        "is_low_contrast":  is_low_contrast,
+        "bad":              is_black or is_white or is_uniform,
+        "reason":           reason,
+    }
+
+
+# ─── OCR ──────────────────────────────────────────────────────────────────────
+_OCR_AVAILABLE: bool | None = None  # None = not yet checked
+
+
+def run_ocr(img: Image.Image) -> tuple[str, int, bool]:
+    """Run tesseract OCR on image. Returns (text, word_count, ocr_available)."""
+    global _OCR_AVAILABLE
+
+    if _OCR_AVAILABLE is False:
+        return "", 0, False
+
+    try:
+        import pytesseract
+        # First call: verify tesseract binary is present
+        if _OCR_AVAILABLE is None:
+            pytesseract.get_tesseract_version()
+            _OCR_AVAILABLE = True
+
+        # Upscale small images for better OCR accuracy
+        w, h = img.size
+        if w < 1280:
+            scale = 1280 / w
+            img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+        # PSM 3 = fully automatic page segmentation
+        config = "--psm 3 --oem 1"
+        text = pytesseract.image_to_string(img, lang="pol+eng", config=config)
+        text = text.strip()
+        words = len(text.split()) if text else 0
+        return text, words, True
+
+    except ImportError:
+        if _OCR_AVAILABLE is None:
+            if _ensure_package("pytesseract"):
+                # Retry after auto-install
+                return run_ocr(img)
+            else:
+                print("  ℹ️  OCR wyłączony: nie można zainstalować pytesseract")
+        _OCR_AVAILABLE = False
+        return "", 0, False
+    except Exception as e:
+        if _OCR_AVAILABLE is None:
+            print(f"  ℹ️  OCR niedostępny: {e}")
+            print(f"     Zainstaluj tesseract: sudo apt install tesseract-ocr tesseract-ocr-pol")
+        _OCR_AVAILABLE = False
+        return "", 0, False
+
+
 def compute_change_pct(img_a: np.ndarray, img_b: np.ndarray) -> float:
     """Oblicz % zmiany między dwoma obrazami (downsampled dla szybkości)."""
     if img_a is None or img_b is None:
@@ -218,6 +364,9 @@ class CaptureSession:
 
         last_capture_ts = 0.0
         last_event_ts = 0.0
+        skipped_black = 0
+        skipped_white = 0
+        skipped_uniform = 0
 
         while self._running:
             now = time.monotonic()
@@ -261,13 +410,48 @@ class CaptureSession:
                 frame_idx = len(self.frames)
                 filename = f"frame_{frame_idx:04d}.png"
                 filepath = self.session_dir / "frames" / filename
-                img.save(filepath, "PNG", optimize=True)
+
+                # ── Image quality analysis ──────────────────────────────────
+                qa = analyze_frame(arr)
+                qa_tag = ""
+                if qa["bad"]:
+                    qa_tag = f"  ❌ Klatka odrzucona [{qa['reason']}] — pomijam"
+
+                if qa_tag:
+                    print(qa_tag)
+                    if qa["is_black"]:
+                        skipped_black += 1
+                    elif qa["is_white"]:
+                        skipped_white += 1
+                    else:
+                        skipped_uniform += 1
+                    print(f"     Szczegóły: mean={qa['mean']} std={qa['std']} ch_stds={qa['ch_stds']}")
+                    # Still advance time so we don't spin on bad frames
+                    last_capture_ts = now
+                    continue
+
+                # ── Save frame ──────────────────────────────────────────────
+                try:
+                    img.save(filepath, "PNG", optimize=True)
+                    file_size = filepath.stat().st_size
+                    if file_size == 0:
+                        print(f"  ❌ BŁĄD: Plik {filename} zapisany ale ma 0 bajtów! ({filepath})")
+                        continue
+                except Exception as save_err:
+                    print(f"  ❌ BŁĄD ZAPISU klatki {frame_idx+1}: {save_err}")
+                    print(f"     Ścieżka: {filepath}")
+                    print(f"     Katalog istnieje: {filepath.parent.exists()}")
+                    print(f"     Rozmiar obrazu: {img.width}x{img.height}")
+                    continue
 
                 mx, my = self.tracker.get_mouse_position()
 
                 # Zbierz events od ostatniego zapisu
                 events = self.tracker.get_events_since(last_event_ts)
                 last_event_ts = elapsed
+
+                # ── OCR ──────────────────────────────────────────────────
+                ocr_text, ocr_words, ocr_ok = run_ocr(img)
 
                 frame = FrameMeta(
                     index=frame_idx,
@@ -281,15 +465,44 @@ class CaptureSession:
                     suggested_center_x=mx if mx > 0 else img.width // 2,
                     suggested_center_y=my if my > 0 else img.height // 2,
                     input_events=events,
+                    ocr_text=ocr_text,
+                    ocr_words=ocr_words,
+                    ocr_available=ocr_ok,
                 )
                 self.frames.append(frame)
                 self._prev_array = arr
                 last_capture_ts = now
 
+                # ── Quality summary for log line ────────────────────────────
+                contrast_warn = " ⚠️ nisk.kontrast" if qa["is_low_contrast"] else ""
+                blur_warn     = " 🔵 rozmyta" if qa["blur_score"] < 50 else ""
+                ocr_info      = f" | OCR: {ocr_words}sw" if ocr_ok else ""
                 indicator = "🔴" if change > 20 else "🟡" if change > 5 else "🟢"
-                print(f"  {indicator} Klatka {frame_idx+1:>2} | {elapsed:5.1f}s | zmiana: {change:5.1f}% | mysz: ({mx},{my})")
+                print(
+                    f"  {indicator} Klatka {frame_idx+1:>2} | {elapsed:5.1f}s"
+                    f" | zmiana: {change:5.1f}%"
+                    f" | mysz: ({mx},{my})"
+                    f" | {file_size//1024}KB"
+                    f" | jasność: {qa['mean']:.0f} std: {qa['std']:.0f}"
+                    f" | blur: {qa['blur_score']:.0f}"
+                    f"{ocr_info}{contrast_warn}{blur_warn}"
+                )
+                if ocr_ok and ocr_text:
+                    preview = ocr_text[:120].replace('\n', ' ')
+                    print(f"     📝 OCR: \"{preview}{'...' if len(ocr_text) > 120 else ''}\"")
 
             time.sleep(0.05)
+
+        # ── Session quality summary ──────────────────────────────────────
+        skipped_total = skipped_black + skipped_white + skipped_uniform
+        if skipped_total > 0:
+            parts = []
+            if skipped_black:   parts.append(f"{skipped_black} czarnych")
+            if skipped_white:   parts.append(f"{skipped_white} białych")
+            if skipped_uniform: parts.append(f"{skipped_uniform} jednolitych")
+            print(f"  ⚠️  Pominięto {skipped_total} klatek złej jakości: {', '.join(parts)}")
+        else:
+            print(f"  ✅ Wszystkie klatki przeszły kontrolę jakości")
 
         self.stop()
 

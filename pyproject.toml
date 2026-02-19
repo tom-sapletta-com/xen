@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xeen"
-version = "0.1.9"
+version = "0.1.10"
 description = "Screenshot capture → edit → crop → publish. One command: xeen"
 readme = "README.md"
 license = "Apache-2.0"
@@ -33,6 +33,7 @@ dependencies = [
     "aiofiles>=23.0.0",
     "numpy>=1.24.0",
     "imagehash>=4.3.0",
+    "pytesseract>=0.3.10",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +43,16 @@ dev = [
     "httpx>=0.25",
     "ruff>=0.1.0",
     "twine>=4.0",
+]
+ocr = [
+    "pytesseract>=0.3.10",
+]
+desktop = [
+    "pywebview>=4.0",
+]
+all = [
+    "pytesseract>=0.3.10",
+    "pywebview>=4.0",
 ]
 
 [project.scripts]
