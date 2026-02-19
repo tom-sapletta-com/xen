@@ -1,3 +1,26 @@
+## [0.1.2] - 2026-02-19
+
+### Summary
+
+refactor(docs): CLI interface with 2 supporting modules
+
+### Docs
+
+- docs: update README
+
+### Test
+
+- update tests/test_xen_capture.py
+
+### Build
+
+- update pyproject.toml
+
+### Config
+
+- config: update goal.yaml
+
+
 ## [0.1.1] - 2026-02-19
 
 ### Summary

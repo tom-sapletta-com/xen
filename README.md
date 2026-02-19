@@ -16,8 +16,8 @@ Ale Canva to za dużo kroków. `xen` robi to w terminalu + przeglądarce.
 
 ```
 ┌─────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│ Capture  │ ──→ │  Select  │ ──→ │  Center  │ ──→ │   Crop   │ ──→ │ Publish  │
-│ xen c    │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
+│ Capture │ ──→ │  Select  │ ──→ │  Center  │ ──→ │   Crop   │ ──→ │ Publish  │
+│ xen c   │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
 └─────────┘     └──────────┘     └──────────┘     └──────────┘     └──────────┘
  screenshoty     wybór klatek     środek uwagi     przycinanie       eksport
  + metadane      grid view        click = center   presety SM        MP4/GIF/ZIP
