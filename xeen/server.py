@@ -87,17 +87,41 @@ async def get_session_thumbnails(name: str, limit: int = 9):
         raise HTTPException(404, "Session not found")
     meta = json.loads(meta_file.read_text())
     frames = meta.get("frames", [])[:limit]
-    return {
-        "name": name,
-        "thumbnails": [
-            {
-                "index": f["index"],
-                "filename": f["filename"],
-                "url": f"/api/sessions/{name}/frames/{f['filename']}"
-            }
-            for f in frames
-        ]
-    }
+    thumbs = []
+    for f in frames:
+        thumb_name = f["filename"].replace(".png", "_thumb.webp")
+        thumbs.append({
+            "index": f["index"],
+            "filename": f["filename"],
+            "thumb_url": f"/api/sessions/{name}/thumbs/{thumb_name}",
+            "url": f"/api/sessions/{name}/frames/{f['filename']}",
+        })
+    return {"name": name, "thumbnails": thumbs}
+
+
+@app.get("/api/sessions/{name}/thumbs/{filename}")
+async def get_thumb_image(name: str, filename: str):
+    """Serve cached thumbnail (WebP). Falls back to generating on-the-fly."""
+    thumb_path = data_dir() / "sessions" / name / "thumbs" / filename
+    if thumb_path.exists():
+        return FileResponse(thumb_path, media_type="image/webp")
+
+    # Fallback: generate from original frame
+    base = filename.replace("_thumb.webp", ".png")
+    frame_path = data_dir() / "sessions" / name / "frames" / base
+    if not frame_path.exists():
+        raise HTTPException(404, "Thumb not found")
+
+    from PIL import Image as PILImage
+    img = PILImage.open(frame_path)
+    tw = 320
+    th = int(img.height * (tw / img.width))
+    thumb = img.resize((tw, th), PILImage.LANCZOS)
+
+    thumb_dir = data_dir() / "sessions" / name / "thumbs"
+    thumb_dir.mkdir(exist_ok=True)
+    thumb.save(thumb_path, "WEBP", quality=75)
+    return FileResponse(thumb_path, media_type="image/webp")
 
 
 @app.get("/api/sessions/{name}/frames/{filename}")

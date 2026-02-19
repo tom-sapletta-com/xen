@@ -437,6 +437,14 @@ class CaptureSession:
                     if file_size == 0:
                         print(f"  ❌ BŁĄD: Plik {filename} zapisany ale ma 0 bajtów! ({filepath})")
                         continue
+                    # Save thumbnail (320px wide WebP) for fast landing page
+                    thumb_dir = self.session_dir / "thumbs"
+                    thumb_dir.mkdir(exist_ok=True)
+                    thumb_name = f"frame_{frame_idx:04d}_thumb.webp"
+                    thumb_w = 320
+                    thumb_h = int(img.height * (thumb_w / img.width))
+                    thumb = img.resize((thumb_w, thumb_h), Image.LANCZOS)
+                    thumb.save(thumb_dir / thumb_name, "WEBP", quality=75)
                 except Exception as save_err:
                     print(f"  ❌ BŁĄD ZAPISU klatki {frame_idx+1}: {save_err}")
                     print(f"     Ścieżka: {filepath}")

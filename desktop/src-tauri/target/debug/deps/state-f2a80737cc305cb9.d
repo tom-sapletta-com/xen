@@ -1,0 +1,12 @@
+/home/tom/github/tom-sapletta-com/xeen/desktop/src-tauri/target/debug/deps/state-f2a80737cc305cb9.d: /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/lib.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/ident_hash.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/storage.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/init.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/shim.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/container.rs
+
+/home/tom/github/tom-sapletta-com/xeen/desktop/src-tauri/target/debug/deps/libstate-f2a80737cc305cb9.rlib: /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/lib.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/ident_hash.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/storage.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/init.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/shim.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/container.rs
+
+/home/tom/github/tom-sapletta-com/xeen/desktop/src-tauri/target/debug/deps/libstate-f2a80737cc305cb9.rmeta: /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/lib.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/ident_hash.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/storage.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/init.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/shim.rs /home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/container.rs
+
+/home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/lib.rs:
+/home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/ident_hash.rs:
+/home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/storage.rs:
+/home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/init.rs:
+/home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/shim.rs:
+/home/tom/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/state-0.5.3/src/container.rs:

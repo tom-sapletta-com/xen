@@ -1,3 +1,3 @@
 """xeen - Screenshot capture, edit, crop, publish. One command."""
 
-__version__ = "0.1.10"
+__version__ = "0.1.11"

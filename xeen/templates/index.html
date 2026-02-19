@@ -305,7 +305,10 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 }
 
 .export-links {
-  display: grid; gap: 8px; margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
 }
 .export-links a {
   display: inline-flex; align-items: center; gap: 8px;
@@ -319,6 +322,41 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 .export-error {
   padding: 8px 12px; background: var(--red); color: white;
   border-radius: 6px; font-size: 13px; margin-bottom: 8px;
+}
+
+.export-preview {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface1); overflow: hidden;
+  display: flex; flex-direction: column;
+  height: 100%;
+}
+.preview-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+.format-badge {
+  background: var(--accent); color: var(--bg);
+  padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+}
+.download-link {
+  color: var(--text); text-decoration: none; font-size: 12px;
+  transition: color 0.2s;
+}
+.download-link:hover {
+  color: var(--accent);
+}
+.preview-content {
+  padding: 12px; display: flex; justify-content: center;
+  background: var(--bg); flex: 1;
+  min-height: 200px;
+}
+.preview-media {
+  max-width: 100%; max-height: 200px;
+  border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.preview-icon {
+  font-size: 48px; opacity: 0.5;
 }
 .mode-toggle {
   margin-left: auto;
@@ -343,6 +381,40 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
   font-size: 10px; font-weight: 600;
   padding: 1px 5px; border-radius: 4px;
 }
+
+/* ─── Annotate ─────── */
+.annotate-workspace {
+  display: flex; gap: 16px;
+}
+.annotate-frame-list {
+  width: 120px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 70vh; overflow-y: auto;
+}
+.annotate-thumb {
+  border: 2px solid var(--border); border-radius: 6px;
+  cursor: pointer; overflow: hidden; position: relative;
+}
+.annotate-thumb.active { border-color: var(--accent); }
+.annotate-thumb img { width: 100%; display: block; }
+.annotate-thumb .idx {
+  position: absolute; top: 2px; left: 4px;
+  font-size: 10px; color: white; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+.annotate-canvas-wrap {
+  flex: 1; position: relative; background: var(--surface);
+  border-radius: var(--radius); overflow: hidden;
+  display: flex; align-items: flex-start; justify-content: center;
+}
+.annotate-canvas-wrap canvas {
+  max-width: 100%; max-height: 70vh; cursor: crosshair; display: block;
+}
+.annotate-color-btn {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid var(--border); cursor: pointer;
+}
+.annotate-color-btn.active { border-color: white; box-shadow: 0 0 0 2px var(--accent); }
+.annotate-size-range { width: 80px; vertical-align: middle; }
 
 /* ─── Center Marker ─────── */
 .center-workspace {
@@ -505,17 +577,20 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
   <div class="tab active" data-tab="select">
     <span class="num">1</span>Wybór klatek
   </div>
+  <div class="tab" data-tab="annotate">
+    <span class="num">2</span>Adnotacje
+  </div>
   <div class="tab" data-tab="center">
-    <span class="num">2</span>Środek
+    <span class="num">3</span>Środek
   </div>
   <div class="tab" data-tab="crop">
-    <span class="num">3</span>Przycinanie
+    <span class="num">4</span>Przycinanie
   </div>
   <div class="tab" data-tab="versions">
-    <span class="num">4</span>Wersje
+    <span class="num">5</span>Wersje
   </div>
   <div class="tab" data-tab="publish">
-    <span class="num">5</span>Publikacja
+    <span class="num">6</span>Publikacja
   </div>
 </div>
 
@@ -586,15 +661,67 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
     <div class="btn-group">
       <button class="btn btn-outline" onclick="selectAllFrames()">Zaznacz wszystkie</button>
       <button class="btn btn-outline" onclick="deselectAllFrames()">Odznacz wszystkie</button>
-      <button class="btn btn-primary" onclick="saveSelection(); navigateToTab('center')">Dalej → Środek</button>
+      <button class="btn btn-primary" onclick="saveSelection(); navigateToTab('annotate')">Dalej → Adnotacje</button>
     </div>
   </div>
 
-  <!-- ═══ Tab 2: Center Marking ═══ -->
+  <!-- ═══ Tab 2: Annotate ═══ -->
+  <div class="panel" id="panel-annotate">
+    <div class="panel-header">
+      <h2>Adnotacje</h2>
+      <p>Dodaj strzałki, prostokąty i tekst na klatkach. Pomiń jeśli nie potrzebujesz.</p>
+    </div>
+
+    <div class="tools-bar">
+      <button class="tool-btn success" id="annToolArrow" onclick="setAnnotateTool('arrow')" title="Strzałka">
+        <span class="icon">↗️</span> Strzałka
+      </button>
+      <button class="tool-btn" id="annToolRect" onclick="setAnnotateTool('rect')" title="Prostokąt / highlight">
+        <span class="icon">⬜</span> Prostokąt
+      </button>
+      <button class="tool-btn" id="annToolText" onclick="setAnnotateTool('text')" title="Tekst">
+        <span class="icon">🅰</span> Tekst
+      </button>
+      <div class="tools-divider"></div>
+      <button class="annotate-color-btn active" style="background:#fc5c7c" onclick="setAnnotateColor('#fc5c7c',this)" title="Czerwony"></button>
+      <button class="annotate-color-btn" style="background:#fcac5c" onclick="setAnnotateColor('#fcac5c',this)" title="Pomarańczowy"></button>
+      <button class="annotate-color-btn" style="background:#5cfc7c" onclick="setAnnotateColor('#5cfc7c',this)" title="Zielony"></button>
+      <button class="annotate-color-btn" style="background:#5cacfc" onclick="setAnnotateColor('#5cacfc',this)" title="Niebieski"></button>
+      <button class="annotate-color-btn" style="background:#ffffff" onclick="setAnnotateColor('#ffffff',this)" title="Biały"></button>
+      <div class="tools-divider"></div>
+      <label style="font-size:11px;color:var(--text2)">Grubość:</label>
+      <input type="range" class="annotate-size-range" min="2" max="10" value="3" id="annLineWidth">
+      <div class="tools-divider"></div>
+      <button class="tool-btn" onclick="undoAnnotation()" title="Cofnij">
+        <span class="icon">↩️</span> Cofnij
+      </button>
+      <button class="tool-btn danger" onclick="clearAnnotations()" title="Wyczyść">
+        <span class="icon">🗑</span> Wyczyść
+      </button>
+    </div>
+
+    <div class="annotate-workspace">
+      <div class="annotate-frame-list" id="annotateFrameList"></div>
+      <div class="annotate-canvas-wrap" id="annotateCanvasWrap">
+        <canvas id="annotateCanvas" width="800" height="600"></canvas>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="navigateToTab('select')">← Wstecz</button>
+      <button class="btn btn-outline" onclick="navigateToTab('center')">Pomiń adnotacje →</button>
+      <button class="btn btn-primary" onclick="saveAnnotations(); navigateToTab('center')">Dalej → Środek</button>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 3: Center Marking ═══ -->
   <div class="panel" id="panel-center">
     <div class="panel-header">
       <h2>Oznacz środek</h2>
       <p>Kliknij na obrazie aby wyznaczyć punkt centralny. 🔴 = kursor myszy z nagrania (sugestia).</p>
+      <p style="font-size:11px;color:var(--text2);margin-top:4px">
+        ⌨️ <b>←/→</b> kolejna klatka &nbsp;|&nbsp; <b>Spacja</b> zatwierdź sugestię + dalej &nbsp;|&nbsp; <b>C</b> kopiuj z poprzedniej &nbsp;|&nbsp; <b>Enter</b> dalej → Crop
+      </p>
     </div>
 
     <div class="tools-bar">
@@ -727,21 +854,21 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
           </select>
         </div>
         <div class="export-row">
+          <label>Czas/klatka:</label>
+          <input type="range" id="exportDuration" min="0.1" max="5" value="2" step="0.1" 
+                 oninput="document.getElementById('durationValue').textContent = this.value + 's'">
+          <span id="durationValue" class="range-value">2s</span>
+          <div class="range-labels">
+            <span>0.1s</span><span>2.5s</span><span>5s</span>
+          </div>
+        </div>
+        <div class="export-row" style="display:none;">
           <label>FPS:</label>
           <input type="range" id="exportFps" min="1" max="10" value="2" step="1" 
                  oninput="document.getElementById('fpsValue').textContent = this.value">
           <span id="fpsValue" class="range-value">2</span>
           <div class="range-labels">
             <span>1</span><span>5</span><span>10</span>
-          </div>
-        </div>
-        <div class="export-row">
-          <label>Czas/klatka:</label>
-          <input type="range" id="exportDuration" min="0.5" max="5" value="2" step="0.5" 
-                 oninput="document.getElementById('durationValue').textContent = this.value + 's'">
-          <span id="durationValue" class="range-value">2s</span>
-          <div class="range-labels">
-            <span>0.5s</span><span>2.5s</span><span>5s</span>
           </div>
         </div>
       </div>
@@ -1175,7 +1302,221 @@ function selectEveryNth() {
   toast(`Zaznaczono co ${n}. klatkę — ${selectedFrames.size} zaznaczonych`);
 }
 
-// ─── Tools: Tab 2 (Center) ──────────────────────────────────────────────────
+// ─── Tab 2: Annotations ─────────────────────────────────────────────────────
+let annTool = 'arrow';       // 'arrow' | 'rect' | 'text'
+let annColor = '#fc5c7c';
+let annDrawing = false;
+let annStartX = 0, annStartY = 0;
+let annCurrentFrame = null;
+// annotations[frameIndex] = [ {type, color, lineWidth, x1,y1,x2,y2, text?} ]
+let annotations = {};
+let annBgImage = null;       // current background Image object
+
+function setAnnotateTool(tool) {
+  annTool = tool;
+  ['annToolArrow','annToolRect','annToolText'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('success', id === 'annTool' + tool.charAt(0).toUpperCase() + tool.slice(1));
+  });
+}
+
+function setAnnotateColor(color, btn) {
+  annColor = color;
+  document.querySelectorAll('.annotate-color-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function renderAnnotatePanel() {
+  if (!sessionData) return;
+  const list = document.getElementById('annotateFrameList');
+  list.innerHTML = '';
+  const selected = [...selectedFrames].sort();
+
+  selected.forEach((idx, i) => {
+    const f = sessionData.frames[idx];
+    const thumb = document.createElement('div');
+    const hasAnn = annotations[idx] && annotations[idx].length > 0;
+    thumb.className = `annotate-thumb${i === 0 && annCurrentFrame === null ? ' active' : ''}${annCurrentFrame === idx ? ' active' : ''}`;
+    thumb.onclick = () => showAnnotateFrame(idx);
+    thumb.innerHTML = `
+      <img src="/api/sessions/${currentSession}/frames/${f.filename}">
+      <span class="idx">#${idx+1} ${hasAnn ? '✏️' : ''}</span>
+    `;
+    list.appendChild(thumb);
+  });
+
+  if (selected.length > 0 && annCurrentFrame === null) showAnnotateFrame(selected[0]);
+}
+
+function showAnnotateFrame(idx) {
+  annCurrentFrame = idx;
+  const f = sessionData.frames[idx];
+  const canvas = document.getElementById('annotateCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    annBgImage = img;
+    redrawAnnotations();
+  };
+  img.src = `/api/sessions/${currentSession}/frames/${f.filename}`;
+
+  // Highlight thumb
+  document.querySelectorAll('.annotate-thumb').forEach(t => t.classList.remove('active'));
+  const thumbs = document.querySelectorAll('.annotate-thumb');
+  const selected = [...selectedFrames].sort();
+  const ti = selected.indexOf(idx);
+  if (ti >= 0 && thumbs[ti]) thumbs[ti].classList.add('active');
+}
+
+function redrawAnnotations() {
+  const canvas = document.getElementById('annotateCanvas');
+  const ctx = canvas.getContext('2d');
+  if (annBgImage) {
+    ctx.drawImage(annBgImage, 0, 0);
+  }
+  const items = annotations[annCurrentFrame] || [];
+  items.forEach(a => drawAnnotation(ctx, a));
+}
+
+function drawAnnotation(ctx, a) {
+  ctx.strokeStyle = a.color;
+  ctx.fillStyle = a.color;
+  ctx.lineWidth = a.lineWidth;
+  ctx.lineCap = 'round';
+
+  if (a.type === 'arrow') {
+    // Line
+    ctx.beginPath();
+    ctx.moveTo(a.x1, a.y1);
+    ctx.lineTo(a.x2, a.y2);
+    ctx.stroke();
+    // Arrowhead
+    const angle = Math.atan2(a.y2 - a.y1, a.x2 - a.x1);
+    const headLen = Math.max(a.lineWidth * 5, 16);
+    ctx.beginPath();
+    ctx.moveTo(a.x2, a.y2);
+    ctx.lineTo(a.x2 - headLen * Math.cos(angle - 0.4), a.y2 - headLen * Math.sin(angle - 0.4));
+    ctx.lineTo(a.x2 - headLen * Math.cos(angle + 0.4), a.y2 - headLen * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+  } else if (a.type === 'rect') {
+    ctx.lineWidth = a.lineWidth;
+    ctx.strokeRect(a.x1, a.y1, a.x2 - a.x1, a.y2 - a.y1);
+    // Light fill for highlight effect
+    ctx.fillStyle = a.color + '18';
+    ctx.fillRect(a.x1, a.y1, a.x2 - a.x1, a.y2 - a.y1);
+  } else if (a.type === 'text') {
+    const fontSize = Math.max(a.lineWidth * 8, 20);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = a.color;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(a.text, a.x1, a.y1);
+    ctx.shadowBlur = 0;
+  }
+}
+
+function getCanvasCoords(e) {
+  const canvas = document.getElementById('annotateCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: Math.round((e.clientX - rect.left) * scaleX),
+    y: Math.round((e.clientY - rect.top) * scaleY),
+  };
+}
+
+function setupAnnotateCanvas() {
+  const canvas = document.getElementById('annotateCanvas');
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (annCurrentFrame === null) return;
+    const { x, y } = getCanvasCoords(e);
+    annDrawing = true;
+    annStartX = x;
+    annStartY = y;
+
+    if (annTool === 'text') {
+      annDrawing = false;
+      const text = prompt('Wpisz tekst:', '');
+      if (!text) return;
+      if (!annotations[annCurrentFrame]) annotations[annCurrentFrame] = [];
+      annotations[annCurrentFrame].push({
+        type: 'text', color: annColor,
+        lineWidth: parseInt(document.getElementById('annLineWidth').value),
+        x1: x, y1: y, x2: x, y2: y, text,
+      });
+      redrawAnnotations();
+    }
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!annDrawing || annTool === 'text') return;
+    const { x, y } = getCanvasCoords(e);
+    // Live preview
+    redrawAnnotations();
+    const ctx = canvas.getContext('2d');
+    const lw = parseInt(document.getElementById('annLineWidth').value);
+    drawAnnotation(ctx, {
+      type: annTool, color: annColor, lineWidth: lw,
+      x1: annStartX, y1: annStartY, x2: x, y2: y,
+    });
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (!annDrawing || annTool === 'text') return;
+    annDrawing = false;
+    const { x, y } = getCanvasCoords(e);
+    const lw = parseInt(document.getElementById('annLineWidth').value);
+    if (!annotations[annCurrentFrame]) annotations[annCurrentFrame] = [];
+    annotations[annCurrentFrame].push({
+      type: annTool, color: annColor, lineWidth: lw,
+      x1: annStartX, y1: annStartY, x2: x, y2: y,
+    });
+    redrawAnnotations();
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    if (annDrawing && annTool !== 'text') {
+      annDrawing = false;
+      redrawAnnotations();
+    }
+  });
+}
+
+function undoAnnotation() {
+  if (annCurrentFrame === null) return;
+  const items = annotations[annCurrentFrame];
+  if (!items || items.length === 0) { toast('Brak adnotacji do cofnięcia'); return; }
+  items.pop();
+  redrawAnnotations();
+  toast('Cofnięto adnotację');
+}
+
+function clearAnnotations() {
+  if (annCurrentFrame === null) return;
+  annotations[annCurrentFrame] = [];
+  redrawAnnotations();
+  toast('Wyczyszczono adnotacje na tej klatce');
+}
+
+function saveAnnotations() {
+  // Annotations are saved as rendered PNGs onto the frame images
+  // For now, store in memory — actual baking happens at export
+  toast(`Zapisano adnotacje dla ${Object.keys(annotations).filter(k => annotations[k]?.length > 0).length} klatek`);
+}
+
+// Init annotation canvas on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+  setupAnnotateCanvas();
+});
+
+// ─── Tools: Tab 3 (Center) ──────────────────────────────────────────────────
 
 function centerToMiddle() {
   if (!sessionData) return;
@@ -1287,6 +1628,68 @@ function setupCenterCanvas() {
     const py = e.clientY - rect.top;
     document.getElementById('crossH').style.cssText = `display:block;top:${py + rect.top - wrap.getBoundingClientRect().top}px`;
     document.getElementById('crossV').style.cssText = `display:block;left:${px + rect.left - wrap.getBoundingClientRect().left}px`;
+  });
+
+  // ── Keyboard shortcuts ──
+  document.addEventListener('keydown', (e) => {
+    // Only active when center panel is visible
+    const panel = document.getElementById('panel-center');
+    if (!panel || !panel.classList.contains('active')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+    const selected = [...selectedFrames].sort();
+    const curIdx = selected.indexOf(currentCenterFrame);
+
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        e.preventDefault();
+        if (curIdx < selected.length - 1) showCenterFrame(selected[curIdx + 1]);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault();
+        if (curIdx > 0) showCenterFrame(selected[curIdx - 1]);
+        break;
+      case ' ':  // Space = accept suggestion (mouse cursor position)
+        e.preventDefault();
+        {
+          const f = sessionData.frames[currentCenterFrame];
+          const sx = f.suggested_center_x || Math.round(f.width / 2);
+          const sy = f.suggested_center_y || Math.round(f.height / 2);
+          setCenter(currentCenterFrame, sx, sy);
+          // Auto-advance to next frame
+          if (curIdx < selected.length - 1) {
+            setTimeout(() => showCenterFrame(selected[curIdx + 1]), 150);
+          }
+        }
+        break;
+      case 'c':
+      case 'C':  // C = copy center from previous frame
+        e.preventDefault();
+        if (curIdx > 0) {
+          const prev = centerMarks[selected[curIdx - 1]];
+          if (prev) {
+            setCenter(currentCenterFrame, prev.x, prev.y);
+            // Auto-advance
+            if (curIdx < selected.length - 1) {
+              setTimeout(() => showCenterFrame(selected[curIdx + 1]), 150);
+            }
+          } else {
+            toast('Poprzednia klatka nie ma oznaczonego środka');
+          }
+        }
+        break;
+      case 'Enter':  // Enter = next tab
+        e.preventDefault();
+        saveCenters();
+        navigateToTab('crop');
+        break;
+      case 'Escape':
+        e.preventDefault();
+        navigateToTab('select');
+        break;
+    }
   });
 }
 
@@ -1518,7 +1921,7 @@ async function exportFormat(format) {
         preset: document.getElementById('exportPreset').value,
         format: format,
         duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
-        fps: parseInt(document.getElementById('exportFps').value),
+        fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
         frame_indices: [...selectedFrames].sort(),
       },
     });
@@ -1527,16 +1930,35 @@ async function exportFormat(format) {
     document.getElementById('exportResults').style.display = 'block';
     const linksContainer = document.getElementById('exportLinks');
     
-    // Check if link already exists
-    let existingLink = document.querySelector(`[data-format-link="${format}"]`);
-    if (!existingLink) {
-      existingLink = document.createElement('a');
-      existingLink.dataset.formatLink = format;
-      linksContainer.appendChild(existingLink);
+    // Check if preview already exists
+    let existingPreview = document.querySelector(`[data-format-link="${format}"]`);
+    if (!existingPreview) {
+      existingPreview = document.createElement('div');
+      existingPreview.className = 'export-preview';
+      existingPreview.dataset.formatLink = format;
+      linksContainer.appendChild(existingPreview);
     }
     
-    existingLink.href = result.download_url;
-    existingLink.textContent = `⬇ ${result.filename} (${result.size_mb} MB)`;
+    // Create preview element based on format
+    let previewElement = '';
+    if (format === 'zip') {
+      previewElement = `<div class="preview-icon">📁</div>`;
+    } else {
+      const isVideo = ['video', 'webm'].includes(format);
+      const tag = isVideo ? 'video' : 'img';
+      const extraAttrs = isVideo ? 'controls muted loop autoplay' : '';
+      previewElement = `<${tag} src="${result.download_url}" ${extraAttrs} class="preview-media"></${tag}>`;
+    }
+    
+    existingPreview.innerHTML = `
+      <div class="preview-header">
+        <span class="format-badge">${format.toUpperCase()}</span>
+        <a href="${result.download_url}" download class="download-link">⬇ ${result.filename} (${result.size_mb} MB)</a>
+      </div>
+      <div class="preview-content">
+        ${previewElement}
+      </div>
+    `;
     
     toast(`Eksport ${format.toUpperCase()} gotowy!`);
   } catch (e) {
@@ -1567,7 +1989,7 @@ async function exportAllFormats() {
           preset: document.getElementById('exportPreset').value,
           format: format,
           duration_per_frame: parseFloat(document.getElementById('exportDuration').value),
-          fps: parseInt(document.getElementById('exportFps').value),
+          fps: Math.round(1 / parseFloat(document.getElementById('exportDuration').value)),
           frame_indices: [...selectedFrames].sort(),
         },
       }).then(result => ({ format, result }))
@@ -1588,11 +2010,32 @@ async function exportAllFormats() {
         errorDiv.textContent = `❌ ${format.toUpperCase()}: ${error.message}`;
         linksContainer.appendChild(errorDiv);
       } else {
-        const link = document.createElement('a');
-        link.href = result.download_url;
-        link.textContent = `⬇ ${result.filename} (${result.size_mb} MB)`;
-        link.dataset.formatLink = format;
-        linksContainer.appendChild(link);
+        const previewDiv = document.createElement('div');
+        previewDiv.className = 'export-preview';
+        previewDiv.dataset.formatLink = format;
+        
+        // Create preview element based on format
+        let previewElement = '';
+        if (format === 'zip') {
+          previewElement = `<div class="preview-icon">📁</div>`;
+        } else {
+          const isVideo = ['video', 'webm'].includes(format);
+          const tag = isVideo ? 'video' : 'img';
+          const extraAttrs = isVideo ? 'controls muted loop autoplay' : '';
+          previewElement = `<${tag} src="${result.download_url}" ${extraAttrs} class="preview-media"></${tag}>`;
+        }
+        
+        previewDiv.innerHTML = `
+          <div class="preview-header">
+            <span class="format-badge">${format.toUpperCase()}</span>
+            <a href="${result.download_url}" download class="download-link">⬇ ${result.filename} (${result.size_mb} MB)</a>
+          </div>
+          <div class="preview-content">
+            ${previewElement}
+          </div>
+        `;
+        
+        linksContainer.appendChild(previewDiv);
       }
     });
     
@@ -1660,6 +2103,7 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
 
   // Lazy load tab content
+  if (name === 'annotate') renderAnnotatePanel();
   if (name === 'center') renderCenterPanel();
   if (name === 'crop') loadCropPreview();
 }

@@ -1,3 +1,24 @@
+## [0.1.11] - 2026-02-19
+
+### Summary
+
+fix(build): CLI interface improvements
+
+### Other
+
+- update desktop/src-tauri/Cargo.lock
+- update desktop/src-tauri/Cargo.toml
+- update desktop/src-tauri/target/.rustc_info.json
+- update desktop/src-tauri/target/CACHEDIR.TAG
+- update desktop/src-tauri/target/debug/.cargo-lock
+- update desktop/src-tauri/target/debug/.fingerprint/adler2-52425355d9422a77/dep-lib-adler2
+- update desktop/src-tauri/target/debug/.fingerprint/adler2-52425355d9422a77/invoked.timestamp
+- update desktop/src-tauri/target/debug/.fingerprint/adler2-52425355d9422a77/lib-adler2
+- update desktop/src-tauri/target/debug/.fingerprint/adler2-52425355d9422a77/lib-adler2.json
+- update desktop/src-tauri/target/debug/.fingerprint/aho-corasick-146460e891097f15/dep-lib-aho_corasick
+- ... and 1872 more
+
+
 ## [0.1.10] - 2026-02-19
 
 ### Summary

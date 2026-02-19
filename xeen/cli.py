@@ -38,6 +38,26 @@ def main():
     srv.add_argument("--data-dir", type=str, default=None,
                      help="Katalog danych (domyślnie: ~/.xeen)")
 
+    # xeen auto
+    auto = sub.add_parser("auto", aliases=["a"], help="Zero-click: capture → crop → export (jeden krok)")
+    auto.add_argument("-d", "--duration", type=float, default=10.0,
+                      help="Czas nagrywania (domyślnie: 10s)")
+    auto.add_argument("-i", "--interval", type=float, default=1.0,
+                      help="Interwał (domyślnie: 1s)")
+    auto.add_argument("--preset", type=str, default="widescreen",
+                      help="Preset: widescreen, twitter_post, instagram_post, ... (domyślnie: widescreen)")
+    auto.add_argument("-o", "--output", type=str, default=None,
+                      help="Ścieżka wyjściowa (domyślnie: ~/.xeen/exports/...)")
+    auto.add_argument("-f", "--format", type=str, default="mp4",
+                      choices=["mp4", "gif", "webm", "zip"],
+                      help="Format wyjściowy (domyślnie: mp4)")
+    auto.add_argument("--session", type=str, default=None,
+                      help="Użyj istniejącej sesji (pomiń capture)")
+    auto.add_argument("--fps", type=int, default=2, help="FPS (domyślnie: 2)")
+    auto.add_argument("--frame-duration", type=float, default=2.0,
+                      help="Czas wyświetlania klatki (domyślnie: 2s)")
+    auto.add_argument("--monitor", type=int, default=0, help="Monitor")
+
     # xeen desktop
     desk = sub.add_parser("desktop", aliases=["d"], help="Uruchom jako aplikację desktopową (Tauri)")
     desk.add_argument("-p", "--port", type=int, default=7600, help="Port serwera (domyślnie: 7600)")
@@ -61,6 +81,8 @@ def main():
 
     if args.command in ("capture", "c"):
         run_capture(args)
+    elif args.command in ("auto", "a"):
+        run_auto(args)
     elif args.command in ("server", "s"):
         run_server(args)
     elif args.command in ("desktop", "d"):
@@ -111,6 +133,37 @@ def run_capture(args):
     print(f"   📸 {summary['frame_count']} klatek | {summary['duration']:.1f}s")
     print(f"   📁 {summary['path']}")
     print(f"\n   Uruchom 'xeen server' aby edytować w przeglądarce")
+    # Print session name to stdout for piping
+    print(summary['name'])
+
+
+def run_auto(args):
+    """Zero-click pipeline: capture → deduplicate → center → crop → export."""
+    from xeen.auto_pipeline import auto_pipeline
+
+    print(f"🚀 xeen auto")
+    print(f"   Preset: {args.preset} | Format: {args.format} | Czas: {args.duration}s\n")
+
+    try:
+        result = auto_pipeline(
+            duration=args.duration,
+            interval=args.interval,
+            preset=args.preset,
+            output=args.output,
+            fmt=args.format,
+            session_name=args.session,
+            fps=args.fps,
+            duration_per_frame=args.frame_duration,
+            monitor=args.monitor,
+            verbose=True,
+        )
+        if "error" in result:
+            sys.exit(1)
+        # Print output path to stdout for piping
+        print(result["output"])
+    except KeyboardInterrupt:
+        print("\n⏹  Przerwano")
+        sys.exit(1)
 
 
 def _fallback_to_browser_capture(port: int = 7600, host: str = "127.0.0.1"):

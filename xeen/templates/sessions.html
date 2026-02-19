@@ -363,6 +363,20 @@ body {
     <p>Kliknij na sesję aby rozpocząć edycję i eksport</p>
   </div>
 
+  <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+    <a href="/capture" style="flex:1;min-width:200px;display:flex;align-items:center;justify-content:center;gap:10px;
+       padding:20px 24px;border-radius:12px;background:var(--accent);color:var(--bg);font-size:16px;font-weight:600;
+       text-decoration:none;transition:all .2s;border:2px solid var(--accent)">
+      🎥 Nagraj ekran
+    </a>
+    <label style="flex:1;min-width:200px;display:flex;align-items:center;justify-content:center;gap:10px;
+       padding:20px 24px;border-radius:12px;background:var(--surface2);color:var(--text);font-size:16px;font-weight:600;
+       cursor:pointer;transition:all .2s;border:2px solid var(--border)">
+      📂 Wrzuć screeny
+      <input type="file" multiple accept="image/*" style="display:none" onchange="uploadNewSession(this.files)">
+    </label>
+  </div>
+
   <div id="sessionsContainer">
     <div class="loading-container">
       <div class="spinner"></div>
@@ -460,7 +474,7 @@ function renderSessionsGrid(sessions) {
 
       if (i < session.thumbnails.length) {
         const img = document.createElement('img');
-        img.src = session.thumbnails[i].url;
+        img.src = session.thumbnails[i].thumb_url || session.thumbnails[i].url;
         img.alt = `Frame ${session.thumbnails[i].index}`;
         img.loading = 'lazy';
         thumbDiv.appendChild(img);
@@ -576,6 +590,23 @@ async function emptyTrash() {
   updateTrashBadge();
   renderTrashList();
   toast('Kosz opróżniony');
+}
+
+// ─── Upload New Session ──────────────────────────────────────────────────
+async function uploadNewSession(files) {
+  if (!files || files.length === 0) return;
+  toast(`Wgrywanie ${files.length} plików...`);
+  const form = new FormData();
+  for (const f of files) form.append('files', f);
+  try {
+    const res = await fetch('/api/sessions/upload', { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    toast(`Sesja "${data.name}" utworzona z ${data.frame_count} klatkami`);
+    window.location.href = `/session/${data.name}/tab/select`;
+  } catch (e) {
+    toast('Błąd uploadu: ' + e.message, true);
+  }
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────
