@@ -105,14 +105,27 @@ def apply_watermark(img: Image.Image, branding: dict | None = None) -> Image.Ima
             except (OSError, IOError):
                 font = ImageFont.load_default()
 
-        bbox = draw.textbbox((0, 0), footer, font=font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
         padding = 8
+
+        # Shrink font until text fits within image width (with padding)
+        max_tw = iw - padding * 4
+        for _ in range(20):
+            bbox = draw.textbbox((0, 0), footer, font=font)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+            if tw <= max_tw or font_size <= 8:
+                break
+            font_size = max(8, font_size - 2)
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+            except (OSError, IOError):
+                try:
+                    font = ImageFont.truetype("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", font_size)
+                except (OSError, IOError):
+                    font = ImageFont.load_default()
 
         # Background bar
         bg_color = branding.get("footer_bg", "#00000080")
-        # Parse RGBA hex
         if len(bg_color) == 9:  # #RRGGBBAA
             r = int(bg_color[1:3], 16)
             g = int(bg_color[3:5], 16)
@@ -122,17 +135,18 @@ def apply_watermark(img: Image.Image, branding: dict | None = None) -> Image.Ima
         else:
             bg_rgba = (0, 0, 0, 128)
 
-        bar_y = ih - th - padding * 2
+        bar_h = th + padding * 2
+        bar_y = max(0, ih - bar_h)
         overlay = Image.new("RGBA", (iw, ih), (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
         overlay_draw.rectangle([(0, bar_y), (iw, ih)], fill=bg_rgba)
         img = Image.alpha_composite(img, overlay)
 
-        # Text
+        # Text — centered horizontally, vertically centered in bar
         draw = ImageDraw.Draw(img)
         text_color = branding.get("footer_color", "#ffffff")
-        tx = (iw - tw) // 2
-        ty = bar_y + padding
+        tx = max(padding, (iw - tw) // 2)
+        ty = bar_y + (bar_h - th) // 2
         draw.text((tx, ty), footer, fill=text_color, font=font)
 
     return img.convert("RGB")

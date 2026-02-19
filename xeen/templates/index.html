@@ -1060,13 +1060,13 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         </div>
         
         <label style="font-size:13px;color:var(--text2);display:block;margin:12px 0 8px 0">
-          📏 Obszar wokół myszy: <span id="paddingValue">100px</span>
+          📏 Obszar wokół myszy: <span id="paddingValue">20%</span>
         </label>
-        <input type="range" id="paddingSlider" min="50" max="300" value="100" step="10" 
+        <input type="range" id="paddingSlider" min="10" max="50" value="20" step="1" 
                oninput="updatePadding(this.value)"
                style="width:100%;height:6px;border-radius:3px;background:var(--surface2);outline:none;-webkit-appearance:none">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:4px">
-          <span>50px</span><span>175px</span><span>300px</span>
+          <span>10%</span><span>30%</span><span>50%</span>
         </div>
       </div>
       
@@ -1371,9 +1371,9 @@ let presets = {};
 let duplicateIndices = new Set();  // indices marked as duplicates
 let duplicatePairs = [];           // [{frame_a, frame_b, similarity}]
 let advancedModeOn = false;
-let currentFocusMode = 'screen';
-let currentZoomLevel = 2.0;
-let currentMousePadding = 100;
+let currentFocusMode = 'mouse';
+let currentZoomLevel = 1.0;
+let currentMousePadding = 20;
 
 // ─── URL Management ───────────────────────────────────────────────────────────
 function parseURL() {
@@ -1419,6 +1419,8 @@ function syncConfigToURL() {
   params.set('pad', String(currentMousePadding));
   params.set('dur', document.getElementById('exportDuration')?.value || '0.5');
   params.set('quality', document.getElementById('exportQuality')?.value || '70');
+  params.set('centers', String(Object.keys(centerMarks).length));
+  params.set('sel', String(selectedFrames.size));
   const url = `/session/${currentSession}/tab/${tabName || 'select'}?${params.toString()}`;
   window.history.replaceState({}, '', url);
 }
@@ -1432,44 +1434,66 @@ function navigateToSession(sessionName, tabName = 'select') {
 }
 
 function navigateToTab(tabName) {
-  if (currentSession) {
-    updateURL(currentSession, tabName);
-  }
   switchTab(tabName);
+  if (currentSession) {
+    syncConfigToURL();  // preserves all params including focus/zoom/pad/centers/sel
+  }
 }
 
 function applyConfigFromURL() {
   const params = new URLSearchParams(window.location.search);
-  const preset = params.get('preset');
-  const focus = params.get('focus');
-  const zoom = params.get('zoom');
-  const pad = params.get('pad');
-  const dur = params.get('dur');
+  const preset  = params.get('preset');
+  const focus   = params.get('focus');
+  const zoom    = params.get('zoom');
+  const pad     = params.get('pad');
+  const dur     = params.get('dur');
   const quality = params.get('quality');
 
-  if (preset && presets[preset]) {
+  // ── Preset ──
+  if (preset) {
     activePreset = preset;
     updatePresetBtns();
   }
-  if (focus) updateFocusMode(focus);
-  if (zoom) updateZoom(parseFloat(zoom));
-  if (pad) updatePadding(parseInt(pad));
+
+  // ── Focus mode — set state + UI without triggering video preview ──
+  if (focus) {
+    currentFocusMode = focus;
+    const zoomControls = document.getElementById('zoomControls');
+    if (zoomControls) zoomControls.style.display = focus === 'mouse' ? 'block' : 'none';
+    document.querySelectorAll(`input[name="focusMode"][value="${focus}"], input[name="exportFocusMode"][value="${focus}"]`)
+      .forEach(r => { r.checked = true; });
+  }
+
+  // ── Zoom ──
+  if (zoom) {
+    currentZoomLevel = parseFloat(zoom);
+    const zv = document.getElementById('zoomValue'); if (zv) zv.textContent = currentZoomLevel.toFixed(1) + 'x';
+    const zs = document.getElementById('zoomSlider'); if (zs) zs.value = zoom;
+    const ezv = document.getElementById('exportZoomValue'); if (ezv) ezv.textContent = currentZoomLevel.toFixed(1) + 'x';
+    const ezs = document.getElementById('exportZoomSlider'); if (ezs) ezs.value = zoom;
+  }
+
+  // ── Padding ──
+  if (pad) {
+    currentMousePadding = parseInt(pad);
+    const pv = document.getElementById('paddingValue'); if (pv) pv.textContent = currentMousePadding + '%';
+    const ps = document.getElementById('paddingSlider'); if (ps) ps.value = pad;
+    const epv = document.getElementById('exportPaddingValue'); if (epv) epv.textContent = currentMousePadding + '%';
+    const eps = document.getElementById('exportPaddingSlider'); if (eps) eps.value = pad;
+  }
+
+  // ── Duration ──
   if (dur) {
-    const durationEl = document.getElementById('exportDuration');
-    const durationValue = document.getElementById('durationValue');
-    if (durationEl && durationValue) {
-      durationEl.value = dur;
-      durationValue.textContent = `${dur}s`;
-    }
+    const el = document.getElementById('exportDuration'); if (el) el.value = dur;
+    const lbl = document.getElementById('durationValue'); if (lbl) lbl.textContent = dur + 's';
   }
+
+  // ── Quality ──
   if (quality) {
-    const qualityEl = document.getElementById('exportQuality');
-    const qualityValue = document.getElementById('qualityValue');
-    if (qualityEl && qualityValue) {
-      qualityEl.value = quality;
-      qualityValue.textContent = `${quality}%`;
-    }
+    const el = document.getElementById('exportQuality'); if (el) el.value = quality;
+    const lbl = document.getElementById('qualityValue'); if (lbl) lbl.textContent = quality + '%';
   }
+
   updatePublishPresetInfo();
 }
 
@@ -1477,7 +1501,6 @@ function applyConfigFromURL() {
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSessions();
   await loadPresets();
-  applyConfigFromURL();
   setupDragDrop();
   setupCenterCanvas();
   buildSocialLinks();
@@ -1497,11 +1520,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   
-  // Load initial state from URL
+  // Load initial state from URL — apply config AFTER session+presets loaded
   const { sessionName, tabName } = parseURL();
   if (sessionName) {
     await loadSession(sessionName);
-    if (tabName !== 'select') {
+    applyConfigFromURL();  // re-apply after session loaded (presets now available)
+    if (tabName && tabName !== 'select') {
       switchTab(tabName);
     }
   }
@@ -1546,8 +1570,9 @@ async function loadSession(name) {
   document.getElementById('sessionInfo').textContent =
     `${sessionData.frame_count} klatek • ${sessionData.duration.toFixed(1)}s`;
 
-  // Update URL to reflect current session
-  updateURL(name, 'select');
+  // Preserve current tab in URL when loading session
+  const { tabName: _currentTab } = parseURL();
+  updateURL(name, _currentTab || 'select');
 
   // Show warning if frames are missing on disk
   const missingBanner = document.getElementById('missingFramesBanner');
@@ -2165,6 +2190,7 @@ async function generateVideoPreview(context) {
         focus_mode: currentFocusMode,
         zoom_level: currentZoomLevel,
         mouse_padding: currentMousePadding,
+        custom_centers: Object.fromEntries(Object.entries(centerMarks).map(([k,v]) => [k, {x: v.x, y: v.y}])),
       },
     });
     
@@ -2174,7 +2200,7 @@ async function generateVideoPreview(context) {
     
     previewEl.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%">
-        <img src="${result.preview_url}" style="max-width:100%;max-height:200px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+        <img src="${result.preview_url}?t=${Date.now()}" style="max-width:100%;max-height:200px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
         <div style="font-size:11px;color:var(--text2);text-align:center;line-height:1.4">
           <div><strong>Klatka #${result.frame_index + 1}</strong> • ${focusIcon} ${result.focus_mode}</div>
           ${result.focus_mode === 'mouse' ? `<div>Zoom ${result.zoom_level}x • obszar ${currentMousePadding}px</div>` : ''}
@@ -2224,11 +2250,11 @@ function updateZoom(value) {
 function updatePadding(value) {
   currentMousePadding = parseInt(value);
   const pv = document.getElementById('paddingValue');
-  if (pv) pv.textContent = currentMousePadding + 'px';
+  if (pv) pv.textContent = currentMousePadding + '%';
   const eps = document.getElementById('exportPaddingSlider');
   if (eps) eps.value = value;
   const epv = document.getElementById('exportPaddingValue');
-  if (epv) epv.textContent = currentMousePadding + 'px';
+  if (epv) epv.textContent = currentMousePadding + '%';
   const cropPanel = document.getElementById('panel-crop');
   if (cropPanel && cropPanel.classList.contains('active')) loadCropPreview();
   updateVideoPreview();
@@ -2546,9 +2572,11 @@ async function loadCropPreview() {
       focus_mode: currentFocusMode,
       zoom_level: currentZoomLevel,
       mouse_padding: currentMousePadding,
+      custom_centers: Object.fromEntries(Object.entries(centerMarks).map(([k,v]) => [k, {x: v.x, y: v.y}])),
     },
   });
 
+  const cacheBust = Date.now();
   grid.innerHTML = '';
   result.previews.forEach(p => {
     const card = document.createElement('div');
@@ -2559,7 +2587,7 @@ async function loadCropPreview() {
                       p.focus_mode === 'application' ? '🪬' : '🖥️';
     
     card.innerHTML = `
-      <img src="/api/sessions/${currentSession}/preview/${p.filename}" loading="lazy">
+      <img src="/api/sessions/${currentSession}/preview/${p.filename}?t=${cacheBust}" loading="lazy">
       <div class="info">
         Klatka #${p.index+1} • ${focusIcon} ${p.focus_mode} • zoom: ${p.zoom_level}x<br>
         środek: (${p.center.x}, ${p.center.y}) • ${p.target.w}×${p.target.h}
@@ -3020,6 +3048,14 @@ async function uploadFiles(files) {
 
 // ─── Tab Switching ──────────────────────────────────────────────────────────
 function switchTab(name) {
+  // Auto-save centers when leaving center tab
+  const prevPanel = document.querySelector('.panel.active');
+  if (prevPanel && prevPanel.id === 'panel-center' && name !== 'center') {
+    if (currentSession && Object.keys(centerMarks).length > 0) {
+      saveCenters();  // fire-and-forget, no await needed
+    }
+  }
+
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
 

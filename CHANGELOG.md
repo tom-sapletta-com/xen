@@ -1,3 +1,16 @@
+## [0.1.16] - 2026-02-19
+
+### Summary
+
+feat(xeen): configuration management system
+
+### Other
+
+- update xeen/branding.py
+- update xeen/server.py
+- update xeen/templates/index.html
+
+
 ## [0.1.15] - 2026-02-19
 
 ### Summary

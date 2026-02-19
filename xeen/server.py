@@ -518,6 +518,7 @@ class CropRequest(BaseModel):
     focus_mode: str = "screen"  # "screen" | "mouse" | "keyboard" | "application"
     zoom_level: float = 1.0  # 1.0 - 10.0
     mouse_padding: int = 100  # piksele wokół myszy
+    custom_centers: dict | None = None  # {"0": {"x":..,"y":..}, ..} — nadpisuje session.json
 
 
 @app.post("/api/sessions/{name}/crop-preview")
@@ -541,7 +542,8 @@ async def crop_preview(name: str, req: CropRequest):
 
     # Które klatki
     selected = req.frame_indices or meta.get("selected_frames", list(range(meta["frame_count"])))
-    custom_centers = meta.get("custom_centers", {})
+    # req.custom_centers (inline) mają priorytet nad session.json
+    custom_centers = req.custom_centers if req.custom_centers is not None else meta.get("custom_centers", {})
     frames = meta.get("frames", [])
 
     preview_dir = data_dir() / "sessions" / name / "preview"
@@ -559,35 +561,31 @@ async def crop_preview(name: str, req: CropRequest):
         img = Image.open(filepath)
         iw, ih = img.size
 
-        # Wybierz środek w zależności od focus_mode
-        if req.focus_mode == "mouse":
-            # Użyj pozycji myszy z nagrania
+        # Wybierz środek — custom_centers mają priorytet nad wszystkimi trybami
+        custom_center = custom_centers.get(str(idx))
+        if custom_center:
+            cx, cy = custom_center["x"], custom_center["y"]
+        elif req.focus_mode == "mouse":
             cx = frame.get("mouse_x", iw // 2)
             cy = frame.get("mouse_y", ih // 2)
         elif req.focus_mode == "keyboard":
-            # Dla klawiatury użyj środka dolnej części ekranu (typowa pozycja klawiatury)
             cx = frame.get("suggested_center_x", iw // 2)
-            cy = int(ih * 0.75)  # 75% wysokości
+            cy = int(ih * 0.75)
         elif req.focus_mode == "application":
-            # Dla aplikacji użyj środka górnej części (typowa pozycja okien)
             cx = frame.get("suggested_center_x", iw // 2)
-            cy = int(ih * 0.25)  # 25% wysokości
+            cy = int(ih * 0.25)
         else:  # screen
-            # Użyj custom lub suggested
-            center = custom_centers.get(str(idx))
-            if center:
-                cx, cy = center["x"], center["y"]
-            else:
-                cx = frame.get("suggested_center_x", iw // 2)
-                cy = frame.get("suggested_center_y", ih // 2)
+            cx = frame.get("suggested_center_x", iw // 2)
+            cy = frame.get("suggested_center_y", ih // 2)
 
         # Oblicz region przycinania — zawsze zachowuj target aspect ratio
         # zoom_level > 1 = mniejszy wycinek (bardziej przybliżony)
         aspect = target_w / target_h
         if req.focus_mode == "mouse":
-            # Bazuj na mouse_padding jako połowie krótszego boku, skaluj przez zoom
-            base = min(req.mouse_padding * 2, min(iw, ih))
-            base_zoomed = base / req.zoom_level
+            # Bazuj na mouse_padding jako % krótszego boku, skaluj przez zoom
+            shortest_edge = min(iw, ih)
+            base_px = (req.mouse_padding / 100.0) * shortest_edge  # konwersja % -> piksele
+            base_zoomed = base_px / req.zoom_level
             # Dopasuj do aspect ratio targetu
             if aspect >= 1:  # szerszy niż wysoki
                 crop_h = int(base_zoomed)
@@ -689,8 +687,14 @@ async def generate_video_preview(name: str, req: CropRequest):
     img = Image.open(frame_path)
     iw, ih = img.size
 
-    # Wybierz środek w zależności od focus_mode
-    if req.focus_mode == "mouse":
+    # req.custom_centers (inline) mają priorytet nad session.json
+    custom_centers = req.custom_centers if req.custom_centers is not None else meta.get("custom_centers", {})
+
+    # Wybierz środek — custom_centers mają priorytet nad wszystkimi trybami
+    custom_center = custom_centers.get(str(first_frame_idx))
+    if custom_center:
+        cx, cy = custom_center["x"], custom_center["y"]
+    elif req.focus_mode == "mouse":
         cx = frame.get("mouse_x", iw // 2)
         cy = frame.get("mouse_y", ih // 2)
     elif req.focus_mode == "keyboard":
@@ -706,15 +710,16 @@ async def generate_video_preview(name: str, req: CropRequest):
     # Oblicz region przycinania — zawsze zachowuj target aspect ratio
     aspect = small_target_w / small_target_h
     if req.focus_mode == "mouse":
-        base = min(req.mouse_padding * 2, min(iw, ih))
-        base_zoomed = base / req.zoom_level
+        shortest_edge = min(iw, ih)
+        base_px = (req.mouse_padding / 100.0) * shortest_edge  # konwersja % -> piksele
+        base_zoomed = base_px / req.zoom_level
         if aspect >= 1:
             crop_h = int(base_zoomed)
             crop_w = int(crop_h * aspect)
         else:
             crop_w = int(base_zoomed)
             crop_h = int(crop_w / aspect)
-        logger.info(f"   - **Crop base**: `{base}px` → zoomed `{base_zoomed:.0f}px`")
+        logger.info(f"   - **Crop base**: `{base_px:.0f}px` ({req.mouse_padding}% of {shortest_edge}px) → zoomed `{base_zoomed:.0f}px`")
         logger.info(f"   - **Screen size**: `{iw}x{ih}px`")
     else:
         if iw / ih > aspect:
