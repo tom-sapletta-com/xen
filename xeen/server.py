@@ -87,7 +87,7 @@ except ImportError:
             return func
         return decorator
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -799,7 +799,7 @@ async def save_captions(name: str, payload: CaptionsPayload):
 
 
 @app.post("/api/sessions/{name}/captions/generate")
-async def generate_captions(name: str, req: CaptionGenerateRequest):
+async def generate_captions(name: str, req: CaptionGenerateRequest, x_llm_api_key: str | None = Header(default=None)):
     """Generuj napisy przez LLM (liteLLM)."""
     import os
     import base64
@@ -825,6 +825,20 @@ async def generate_captions(name: str, req: CaptionGenerateRequest):
         litellm.set_verbose = False
     except ImportError:
         raise HTTPException(500, "liteLLM not installed. Run: pip install litellm")
+
+    # Map provider to env var names and apply API key from header or env
+    env_var_map = {
+        "openai":    "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "gemini":    "GEMINI_API_KEY",
+        "ollama":    None,
+    }
+    env_var = env_var_map.get(req.provider)
+    if x_llm_api_key and env_var:
+        os.environ[env_var] = x_llm_api_key
+        logger.info(f"🔑 **API key set** from request header for provider `{req.provider}`")
+    elif env_var and not os.environ.get(env_var):
+        logger.warning(f"⚠️ **No API key** found for `{req.provider}` — set `{env_var}` env var")
 
     captions = []
     for idx in selected[:20]:  # limit do 20 klatek

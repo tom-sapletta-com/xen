@@ -1190,11 +1190,26 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
     </div>
 
     <div class="publish-section">
+
+      <!-- Animated frame preview loop -->
+      <div id="publishAnimWrap" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:20px;text-align:center">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+          🎥 Podgląd animacji &mdash; <span id="publishAnimLabel">pierwsze 3 klatki, loop</span>
+        </div>
+        <div style="position:relative;display:inline-block;background:#000;border-radius:6px;overflow:hidden;min-width:180px;min-height:100px">
+          <img id="publishAnimImg" src="" alt="" style="max-width:100%;max-height:240px;display:block;object-fit:contain">
+          <div id="publishAnimSpinner" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)">
+            <div class="spinner"></div>
+          </div>
+        </div>
+        <div id="publishAnimDots" style="margin-top:8px;display:flex;justify-content:center;gap:6px"></div>
+      </div>
+
       <div class="export-options">
         <div class="export-row">
           <label>Czas/klatka:</label>
-          <input type="range" id="exportDuration" min="0.1" max="5" value="0.5" step="0.1" 
-                 oninput="document.getElementById('durationValue').textContent = this.value + 's'; syncConfigToURL();">
+          <input type="range" id="exportDuration" min="0.1" max="5" value="0.5" step="0.1"
+                 oninput="document.getElementById('durationValue').textContent = this.value + 's'; syncConfigToURL(); restartPublishPreview();">
           <span id="durationValue" class="range-value">0.5s</span>
           <div class="range-labels">
             <span>0.1s</span><span>2.5s</span><span>5s</span>
@@ -1220,18 +1235,11 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         </div>
       </div>
 
-      <div class="export-row">
-        <label>Format:</label>
-        <select id="exportFormat" onchange="exportSession()">
-          <option value="video">🎬 MP4</option>
-          <option value="gif">🎨 GIF</option>
-          <option value="webm">🌐 WebM</option>
-          <option value="zip">📁 ZIP</option>
-        </select>
-      </div>
+      <!-- hidden select kept for JS compatibility -->
+      <select id="exportFormat" style="display:none"><option value="video">MP4</option></select>
 
       <button class="btn btn-success" onclick="exportAllFormats()" id="exportBtn">
-        ⚡ Generuj wszystkie formaty
+        ⚡ Generuj wszystkie formaty (MP4, GIF, WebM, ZIP)
       </button>
 
       <div id="exportResults" style="margin-top:16px;display:none;">
@@ -2612,6 +2620,94 @@ async function exportSession() {
   }
 }
 
+// ─── Publish: Animated Frame Preview Loop ───────────────────────────────────
+let _publishAnimFrames = [];   // array of img src URLs (crop previews)
+let _publishAnimIdx = 0;
+let _publishAnimTimer = null;
+
+async function initPublishPreview() {
+  if (!currentSession || !sessionData) return;
+
+  const img = document.getElementById('publishAnimImg');
+  const spinner = document.getElementById('publishAnimSpinner');
+  const dots = document.getElementById('publishAnimDots');
+  const label = document.getElementById('publishAnimLabel');
+
+  spinner.style.display = 'flex';
+  _publishAnimFrames = [];
+  stopPublishPreview();
+
+  // Pick up to 3 selected frames
+  const sel = [...selectedFrames].sort().slice(0, 3);
+  if (sel.length === 0) { spinner.style.display = 'none'; return; }
+
+  label.textContent = `${sel.length} klatek, loop`;
+
+  try {
+    const result = await api(`/sessions/${currentSession}/crop-preview`, {
+      method: 'POST',
+      body: {
+        preset: activePreset,
+        frame_indices: sel,
+        focus_mode: currentFocusMode,
+        zoom_level: currentZoomLevel,
+        mouse_padding: currentMousePadding,
+      },
+    });
+
+    _publishAnimFrames = result.previews.map(p =>
+      `/api/sessions/${currentSession}/preview/${p.filename}`
+    );
+  } catch (e) {
+    // fallback: use raw frame thumbnails
+    sel.forEach(idx => {
+      const f = sessionData.frames[idx];
+      if (f) _publishAnimFrames.push(`/api/sessions/${currentSession}/frames/${f.filename}`);
+    });
+  }
+
+  if (_publishAnimFrames.length === 0) { spinner.style.display = 'none'; return; }
+
+  // Build dot indicators
+  dots.innerHTML = _publishAnimFrames.map((_, i) =>
+    `<div class="pub-anim-dot" id="pubDot${i}" style="width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .2s"></div>`
+  ).join('');
+
+  // Show first frame, hide spinner
+  img.src = _publishAnimFrames[0];
+  img.onload = () => { spinner.style.display = 'none'; };
+  _publishAnimIdx = 0;
+  updatePublishAnimDot(0);
+  startPublishPreview();
+}
+
+function startPublishPreview() {
+  stopPublishPreview();
+  const dur = parseFloat(document.getElementById('exportDuration')?.value || '0.5') * 1000;
+  _publishAnimTimer = setInterval(() => {
+    if (_publishAnimFrames.length === 0) return;
+    _publishAnimIdx = (_publishAnimIdx + 1) % _publishAnimFrames.length;
+    const img = document.getElementById('publishAnimImg');
+    if (img) img.src = _publishAnimFrames[_publishAnimIdx];
+    updatePublishAnimDot(_publishAnimIdx);
+  }, Math.max(100, dur));
+}
+
+function stopPublishPreview() {
+  if (_publishAnimTimer) { clearInterval(_publishAnimTimer); _publishAnimTimer = null; }
+}
+
+function restartPublishPreview() {
+  stopPublishPreview();
+  startPublishPreview();
+}
+
+function updatePublishAnimDot(activeIdx) {
+  document.querySelectorAll('.pub-anim-dot').forEach((d, i) => {
+    d.style.background = i === activeIdx ? 'var(--accent)' : 'var(--border)';
+  });
+}
+
 async function exportAllFormats() {
   if (!currentSession) return;
   
@@ -2767,6 +2863,11 @@ function switchTab(name) {
   if (name === 'captions') {
     loadCaptionsPanel();
   }
+  if (name === 'publish') {
+    initPublishPreview();
+  } else {
+    stopPublishPreview();
+  }
 }
 
 // Update tab click handlers to use navigation
@@ -2775,6 +2876,421 @@ function updateTabHandlers() {
     const tabName = tab.dataset.tab;
     tab.onclick = () => navigateToTab(tabName);
   });
+}
+
+// ─── Tab 5: Captions / Napisy ────────────────────────────────────────────────
+let captions = [];           // array of caption objects
+let activeCaptionId = null;  // currently selected caption id
+let capDragActive = false;   // drag state for position
+let capDragCapId = null;
+
+function capUUID() {
+  return 'cap_' + Math.random().toString(36).slice(2, 9);
+}
+
+async function loadCaptionsPanel() {
+  if (!currentSession) return;
+  try {
+    const res = await api(`/sessions/${currentSession}/captions`);
+    captions = res.captions || [];
+  } catch(e) {
+    captions = [];
+  }
+  renderCaptionsList();
+  if (captions.length > 0) selectCaption(captions[0].id);
+}
+
+function renderCaptionsList() {
+  const list = document.getElementById('captionsList');
+  const count = document.getElementById('captionCount');
+  if (!list) return;
+  count.textContent = `(${captions.length})`;
+
+  if (captions.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text2);font-size:13px">Brak napisów — dodaj ręcznie lub wygeneruj AI</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  captions.forEach(cap => {
+    const row = document.createElement('div');
+    row.className = `caption-row${cap.id === activeCaptionId ? ' active' : ''}`;
+    row.onclick = () => selectCaption(cap.id);
+
+    const frames = sessionData?.frames || [];
+    const thumbSrc = frames[cap.frame_start]
+      ? `/api/sessions/${currentSession}/frames/${frames[cap.frame_start].filename}`
+      : '';
+
+    const rangeLabel = cap.frame_start === cap.frame_end
+      ? `#${cap.frame_start + 1}`
+      : `#${cap.frame_start + 1}–#${cap.frame_end + 1}`;
+
+    row.innerHTML = `
+      <img class="cap-thumb" src="${thumbSrc}" onerror="this.style.opacity=0.2">
+      <span class="cap-text" title="${cap.text}">${cap.text || '(pusty)'}</span>
+      <span class="cap-frames">${rangeLabel}</span>
+      <button class="cap-del" title="Usuń" onclick="event.stopPropagation(); deleteCaption('${cap.id}')">✕</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function selectCaption(id) {
+  activeCaptionId = id;
+  renderCaptionsList();
+  renderCaptionEditor();
+}
+
+function renderCaptionEditor() {
+  const editor = document.getElementById('captionEditor');
+  if (!editor) return;
+  const cap = captions.find(c => c.id === activeCaptionId);
+  if (!cap) {
+    editor.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">Kliknij napis na liście aby edytować</div>';
+    return;
+  }
+
+  const frames = sessionData?.frames || [];
+  const thumbSrc = frames[cap.frame_start]
+    ? `/api/sessions/${currentSession}/frames/${frames[cap.frame_start].filename}`
+    : '';
+
+  const maxFrame = Math.max(0, frames.length - 1);
+
+  editor.innerHTML = `
+    <!-- Preview with overlay -->
+    <div class="cap-preview-wrap" id="capPreviewWrap">
+      <img id="capPreviewImg" src="${thumbSrc}" alt="">
+      <div class="cap-overlay-text" id="capOverlayText"
+           style="top:${cap.y}%;left:${cap.x}%;
+                  font-size:${cap.font_size * 0.3}px;
+                  color:${cap.color};
+                  background:${hexToRgba(cap.bg_color, cap.bg_opacity)};
+                  font-weight:${cap.bold ? 'bold' : 'normal'};
+                  font-style:${cap.italic ? 'italic' : 'normal'};
+                  text-align:${cap.align}">
+        ${cap.text || ''}
+      </div>
+    </div>
+    <p style="font-size:10px;color:var(--text2);margin:0;text-align:center">⬆ Przeciągnij tekst aby zmienić pozycję</p>
+
+    <!-- Text content -->
+    <div class="cap-field">
+      <label>Tekst napisu</label>
+      <textarea id="capText" oninput="updateCaptionField('text', this.value)">${cap.text}</textarea>
+    </div>
+
+    <!-- Frame range -->
+    <div class="cap-row-inline">
+      <div class="cap-field">
+        <label>Klatka od (#)</label>
+        <input type="number" id="capFrameStart" min="1" max="${maxFrame + 1}" value="${cap.frame_start + 1}"
+               oninput="updateCaptionField('frame_start', parseInt(this.value)-1); updatePreviewThumb()">
+      </div>
+      <div class="cap-field">
+        <label>Klatka do (#)</label>
+        <input type="number" id="capFrameEnd" min="1" max="${maxFrame + 1}" value="${cap.frame_end + 1}"
+               oninput="updateCaptionField('frame_end', parseInt(this.value)-1)">
+      </div>
+    </div>
+
+    <!-- Position -->
+    <div class="cap-row-inline">
+      <div class="cap-field">
+        <label>Pozycja X (%)</label>
+        <input type="range" min="0" max="100" value="${cap.x}" step="1"
+               oninput="updateCaptionField('x', parseFloat(this.value)); updateOverlay()">
+      </div>
+      <div class="cap-field">
+        <label>Pozycja Y (%)</label>
+        <input type="range" min="0" max="100" value="${cap.y}" step="1"
+               oninput="updateCaptionField('y', parseFloat(this.value)); updateOverlay()">
+      </div>
+    </div>
+
+    <!-- Style -->
+    <div class="cap-row-inline">
+      <div class="cap-field">
+        <label>Rozmiar czcionki</label>
+        <input type="range" min="12" max="120" value="${cap.font_size}" step="2"
+               oninput="updateCaptionField('font_size', parseInt(this.value)); updateOverlay(); this.nextElementSibling.textContent=this.value+'px'">
+        <span style="font-size:11px;color:var(--text2)">${cap.font_size}px</span>
+      </div>
+      <div class="cap-field">
+        <label>Wyrównanie</label>
+        <select oninput="updateCaptionField('align', this.value); updateOverlay()">
+          <option value="left" ${cap.align==='left'?'selected':''}>Lewo</option>
+          <option value="center" ${cap.align==='center'?'selected':''}>Środek</option>
+          <option value="right" ${cap.align==='right'?'selected':''}>Prawo</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Colors -->
+    <div class="cap-row-inline">
+      <div class="cap-field">
+        <label>Kolor tekstu</label>
+        <input type="color" value="${cap.color}"
+               oninput="updateCaptionField('color', this.value); updateOverlay()"
+               style="width:100%;height:36px;border-radius:6px;border:1px solid var(--border);cursor:pointer">
+      </div>
+      <div class="cap-field">
+        <label>Kolor tła</label>
+        <input type="color" value="${cap.bg_color}"
+               oninput="updateCaptionField('bg_color', this.value); updateOverlay()"
+               style="width:100%;height:36px;border-radius:6px;border:1px solid var(--border);cursor:pointer">
+      </div>
+      <div class="cap-field">
+        <label>Krycie tła</label>
+        <input type="range" min="0" max="1" step="0.05" value="${cap.bg_opacity}"
+               oninput="updateCaptionField('bg_opacity', parseFloat(this.value)); updateOverlay(); this.nextElementSibling.textContent=Math.round(this.value*100)+'%'">
+        <span style="font-size:11px;color:var(--text2)">${Math.round(cap.bg_opacity*100)}%</span>
+      </div>
+    </div>
+
+    <!-- Bold/Italic -->
+    <div class="cap-row-inline">
+      <div class="cap-field">
+        <label>Pogrubienie</label>
+        <button class="btn ${cap.bold ? 'btn-primary' : 'btn-outline'}" id="capBoldBtn"
+                onclick="updateCaptionField('bold', !${cap.bold}); renderCaptionEditor()">
+          <b>B</b>
+        </button>
+      </div>
+      <div class="cap-field">
+        <label>Kursywa</label>
+        <button class="btn ${cap.italic ? 'btn-primary' : 'btn-outline'}" id="capItalicBtn"
+                onclick="updateCaptionField('italic', !${cap.italic}); renderCaptionEditor()">
+          <i>I</i>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Enable drag on overlay text
+  setupCaptionDrag();
+}
+
+function hexToRgba(hex, opacity) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
+
+function updateCaptionField(field, value) {
+  const cap = captions.find(c => c.id === activeCaptionId);
+  if (!cap) return;
+  cap[field] = value;
+}
+
+function updateOverlay() {
+  const cap = captions.find(c => c.id === activeCaptionId);
+  const overlay = document.getElementById('capOverlayText');
+  if (!cap || !overlay) return;
+  overlay.style.top = cap.y + '%';
+  overlay.style.left = cap.x + '%';
+  overlay.style.fontSize = (cap.font_size * 0.3) + 'px';
+  overlay.style.color = cap.color;
+  overlay.style.background = hexToRgba(cap.bg_color, cap.bg_opacity);
+  overlay.style.fontWeight = cap.bold ? 'bold' : 'normal';
+  overlay.style.fontStyle = cap.italic ? 'italic' : 'normal';
+  overlay.style.textAlign = cap.align;
+  overlay.textContent = cap.text;
+}
+
+function updatePreviewThumb() {
+  const cap = captions.find(c => c.id === activeCaptionId);
+  const img = document.getElementById('capPreviewImg');
+  if (!cap || !img || !sessionData) return;
+  const frames = sessionData.frames || [];
+  if (frames[cap.frame_start]) {
+    img.src = `/api/sessions/${currentSession}/frames/${frames[cap.frame_start].filename}`;
+  }
+}
+
+function setupCaptionDrag() {
+  const overlay = document.getElementById('capOverlayText');
+  const wrap = document.getElementById('capPreviewWrap');
+  if (!overlay || !wrap) return;
+
+  overlay.style.cursor = 'move';
+  overlay.style.userSelect = 'none';
+
+  let dragging = false, startX, startY, startPctX, startPctY;
+
+  overlay.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    const cap = captions.find(c => c.id === activeCaptionId);
+    startPctX = cap.x;
+    startPctY = cap.y;
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const rect = wrap.getBoundingClientRect();
+    const dx = ((e.clientX - startX) / rect.width) * 100;
+    const dy = ((e.clientY - startY) / rect.height) * 100;
+    const cap = captions.find(c => c.id === activeCaptionId);
+    if (!cap) return;
+    cap.x = Math.max(0, Math.min(100, startPctX + dx));
+    cap.y = Math.max(0, Math.min(100, startPctY + dy));
+    updateOverlay();
+  });
+
+  window.addEventListener('mouseup', () => { dragging = false; });
+}
+
+function addCaption() {
+  const frames = sessionData?.frames || [];
+  const firstSelected = [...selectedFrames].sort()[0] ?? 0;
+  const newCap = {
+    id: capUUID(),
+    frame_start: firstSelected,
+    frame_end: firstSelected,
+    text: 'Nowy napis',
+    x: 50.0, y: 85.0,
+    font_size: 32,
+    color: '#ffffff',
+    bg_color: '#000000',
+    bg_opacity: 0.5,
+    bold: false,
+    italic: false,
+    align: 'center',
+  };
+  captions.push(newCap);
+  renderCaptionsList();
+  selectCaption(newCap.id);
+}
+
+function deleteCaption(id) {
+  captions = captions.filter(c => c.id !== id);
+  if (activeCaptionId === id) {
+    activeCaptionId = captions.length > 0 ? captions[0].id : null;
+  }
+  renderCaptionsList();
+  if (activeCaptionId) renderCaptionEditor();
+  else document.getElementById('captionEditor').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2)">Brak napisów</div>';
+}
+
+function autoCaptionsFromFrames() {
+  const selected = [...selectedFrames].sort();
+  if (selected.length === 0) { toast('Zaznacz klatki w zakładce Wybór klatek'); return; }
+  captions = selected.map(idx => ({
+    id: capUUID(),
+    frame_start: idx,
+    frame_end: idx,
+    text: `Klatka #${idx + 1}`,
+    x: 50.0, y: 85.0,
+    font_size: 32,
+    color: '#ffffff',
+    bg_color: '#000000',
+    bg_opacity: 0.5,
+    bold: false,
+    italic: false,
+    align: 'center',
+  }));
+  renderCaptionsList();
+  if (captions.length > 0) selectCaption(captions[0].id);
+  toast(`Utworzono ${captions.length} napisów`);
+}
+
+async function saveCaptions() {
+  if (!currentSession) return;
+  try {
+    await api(`/sessions/${currentSession}/captions`, {
+      method: 'POST',
+      body: { captions },
+    });
+    toast(`Zapisano ${captions.length} napisów`);
+  } catch(e) {
+    toast('Błąd zapisu: ' + e.message);
+  }
+}
+
+function clearAllCaptions() {
+  if (!confirm('Usunąć wszystkie napisy?')) return;
+  captions = [];
+  activeCaptionId = null;
+  renderCaptionsList();
+  document.getElementById('captionEditor').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2)">Brak napisów</div>';
+}
+
+function updateLlmModelPlaceholder() {
+  const provider = document.getElementById('llmProvider').value;
+  const modelInput = document.getElementById('llmModel');
+  const defaults = {
+    openai: 'gpt-4o-mini',
+    anthropic: 'claude-3-haiku-20240307',
+    ollama: 'llava',
+    gemini: 'gemini-1.5-flash',
+  };
+  modelInput.value = defaults[provider] || 'gpt-4o-mini';
+  modelInput.placeholder = defaults[provider] || '';
+}
+
+async function generateCaptionsLLM() {
+  if (!currentSession) return;
+  const apiKey = document.getElementById('llmApiKey').value.trim();
+  const provider = document.getElementById('llmProvider').value;
+  const model = document.getElementById('llmModel').value.trim();
+  const language = document.getElementById('llmLanguage').value;
+  const style = document.getElementById('llmStyle').value;
+
+  // Pass API key as env hint for liteLLM
+  if (apiKey) {
+    const envVarMap = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY', ollama: '' };
+    const envVar = envVarMap[provider];
+    if (envVar) {
+      toast(`Uwaga: klucz API przesyłany przez UI — ustaw zmienną ${envVar} w środowisku dla bezpieczeństwa`);
+    }
+  }
+
+  const btn = document.getElementById('llmGenerateBtn');
+  const status = document.getElementById('llmStatus');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generuję...';
+  status.textContent = 'Wysyłam obrazy do modelu...';
+
+  try {
+    const frameIndices = [...selectedFrames].sort();
+    const result = await fetch(`/api/sessions/${currentSession}/captions/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'X-LLM-API-Key': apiKey } : {}),
+      },
+      body: JSON.stringify({
+        frame_indices: frameIndices.length > 0 ? frameIndices : null,
+        provider,
+        model,
+        language,
+        style,
+      }),
+    });
+
+    if (!result.ok) {
+      const err = await result.json().catch(() => ({ detail: result.statusText }));
+      throw new Error(err.detail || result.statusText);
+    }
+
+    const data = await result.json();
+    captions = data.captions;
+    renderCaptionsList();
+    if (captions.length > 0) selectCaption(captions[0].id);
+    status.textContent = `✅ Wygenerowano ${captions.length} napisów (${data.model})`;
+    toast(`✅ ${captions.length} napisów przez AI`);
+  } catch(e) {
+    status.textContent = `❌ ${e.message}`;
+    toast('Błąd LLM: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 Generuj napisy AI';
+  }
 }
 
 // ─── Toast ──────────────────────────────────────────────────────────────────
