@@ -2468,14 +2468,29 @@ function renderCenterPanel() {
     const sugXpct  = (sugX / f.width * 100).toFixed(2);
     const sugYpct  = (sugY / f.height * 100).toFixed(2);
 
+    const initX = mark ? mark.x : sugX;
+    const initY = mark ? mark.y : sugY;
+
     card.innerHTML = `
+      <div style="display:flex;gap:4px;padding:5px 6px;background:var(--surface2);align-items:center;border-bottom:1px solid var(--border)">
+        <b style="font-size:11px;color:var(--text);white-space:nowrap">#${idx + 1}</b>
+        <label style="font-size:11px;color:var(--text2);white-space:nowrap;margin-left:4px">X:</label>
+        <input type="number" id="cgc-x-${idx}" value="${initX}" min="0" max="${f.width}"
+               style="width:68px;padding:3px 5px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:monospace"
+               onchange="setCenterFromInput(${idx})" onkeydown="if(event.key==='Enter')setCenterFromInput(${idx})">
+        <label style="font-size:11px;color:var(--text2);white-space:nowrap">Y:</label>
+        <input type="number" id="cgc-y-${idx}" value="${initY}" min="0" max="${f.height}"
+               style="width:68px;padding:3px 5px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:monospace"
+               onchange="setCenterFromInput(${idx})" onkeydown="if(event.key==='Enter')setCenterFromInput(${idx})">
+        <button onclick="setCenterFromInput(${idx})" title="Zatwierdź"
+                style="margin-left:auto;padding:2px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer">✓</button>
+      </div>
       <div class="cgc-img-wrap" id="cgc-wrap-${idx}">
         <img src="/api/sessions/${currentSession}/frames/${f.filename}" loading="lazy">
         ${mark ? `<div class="cgc-dot user" style="left:${markXpct}%;top:${markYpct}%"></div>` : ''}
         <div class="cgc-dot mouse" id="cgc-sug-${idx}" style="left:${sugXpct}%;top:${sugYpct}%"></div>
       </div>
       <div class="cgc-label">
-        <b>#${idx + 1}</b>
         <span id="cgc-info-${idx}">${mark ? `🟢 (${mark.x}, ${mark.y})` : `🔴 sug (${sugX}, ${sugY})`}</span>
       </div>
     `;
@@ -2539,10 +2554,29 @@ function setCenter(idx, x, y) {
     // Update label
     const info = document.getElementById(`cgc-info-${idx}`);
     if (info) info.textContent = `🟢 (${x}, ${y})`;
+
+    // Sync coordinate inputs
+    const xi = document.getElementById(`cgc-x-${idx}`);
+    const yi = document.getElementById(`cgc-y-${idx}`);
+    if (xi && xi !== document.activeElement) xi.value = x;
+    if (yi && yi !== document.activeElement) yi.value = y;
   }
 
   updateCenterGridStatus();
   toast(`Fokus klatki #${idx+1}: (${x}, ${y})`);
+}
+
+function setCenterFromInput(idx) {
+  const f = sessionData?.frames?.[idx];
+  if (!f) return;
+  const xi = document.getElementById(`cgc-x-${idx}`);
+  const yi = document.getElementById(`cgc-y-${idx}`);
+  const x = Math.max(0, Math.min(f.width,  parseInt(xi?.value) || 0));
+  const y = Math.max(0, Math.min(f.height, parseInt(yi?.value) || 0));
+  if (xi) xi.value = x;
+  if (yi) yi.value = y;
+  currentCenterFrame = idx;
+  setCenter(idx, x, y);
 }
 
 function updateCenterDot() { /* no-op: replaced by inline grid dots */ }
@@ -2713,6 +2747,7 @@ async function exportSession() {
         focus_mode: currentFocusMode,
         zoom_level: currentZoomLevel,
         mouse_padding: currentMousePadding,
+        transitions: Object.keys(transitions).length > 0 ? transitions : null,
       },
     });
 
@@ -3034,6 +3069,7 @@ async function exportAllFormats() {
           zoom_level: currentZoomLevel,
           mouse_padding: currentMousePadding,
           watermark: document.getElementById('publishWatermark')?.checked || false,
+          transitions: Object.keys(transitions).length > 0 ? transitions : null,
         },
       }).then(result => ({ format, result }))
       .catch(error => ({ format, error }))

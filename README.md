@@ -37,10 +37,14 @@ pip install -e .
 sudo apt install ffmpeg   # Ubuntu/Debian
 brew install ffmpeg        # macOS
 
-# Capture wymaga środowiska GUI:
-# - Lokalne środowisko z desktopem (nie headless)
-# - SSH z przekierowaniem X11: ssh -X user@host
-# - Ustawiona zmienna DISPLAY (np. export DISPLAY=:0)
+# Capture wymaga środowiska GUI, ale xeen automatycznie wykrywa
+# najlepszą metodę i przełącza się na przeglądarkę gdy brak ekranu:
+#
+#   1. mss (X11/Wayland) → najszybszy
+#   2. Pillow ImageGrab   → alternatywa
+#   3. scrot/grim/import  → narzędzia systemowe
+#   4. Przeglądarka (Screen Capture API) → fallback headless
+#   5. Upload ręczny      → zawsze działa
 ```
 
 ## Użycie
@@ -95,26 +99,31 @@ xeen server --no-browser
 | 5. Napisy | Dodaj opisy — ręcznie lub przez AI (LLM) | Dodaj, auto 1/klatka, AI generowanie (OpenAI/Anthropic/Ollama/Gemini), drag&drop |
 | 6. Publikacja | Eksport MP4/GIF/WebM/ZIP + branding + social links | Szybki eksport, eksport wszystkich, znak wodny, folder, kopiuj link |
 
-### 3. Upload zewnętrznych screenshotów
+### 3. Automatyczny fallback capture
 
-Gdy `xeen capture` nie działa (środowisko headless, brak GUI), możesz użyć przeglądarki:
+Gdy `xeen` nie może przechwycić ekranu (headless, brak GUI), automatycznie:
+
+1. Próbuje kolejne backendy: `mss` → `Pillow` → `scrot`/`grim`/`import`
+2. Jeśli żaden nie działa — **uruchamia serwer z trybem Browser Capture**
+3. Przeglądarka otworzy stronę `http://127.0.0.1:7600/capture`
+4. Użyj **Screen Capture API** (getDisplayMedia) do nagrania ekranu z przeglądarki
 
 ```bash
-# Uruchom serwer edycji
+# Automatyczny fallback — xeen sam wykryje co działa
+xeen
+
+# Lub ręcznie uruchom browser capture
 xeen server
+# → otwórz http://127.0.0.1:7600/capture
 ```
 
-W przeglądarze (Tab 1):
+### 4. Upload ręczny
+
+Alternatywnie, w edytorze (Tab 1):
 - **Przeciągnij pliki PNG/JPG** bezpośrednio na stronę
 - **Kliknij "Wybierz pliki"** aby wybrać screenshoty z komputera
-- **Zrób screenshoty ręcznie** (np. PrintScreen, zrzuty ekranu systemowe) i prześlij
 
-To idealna alternatywa dla:
-- Serwerów bez GUI (headless)
-- Połączeń SSH bez przekierowania X11
-- Środowisk wirtualnych i kontenerów
-
-### 4. Lista sesji
+### 5. Lista sesji
 
 ```bash
 xeen list

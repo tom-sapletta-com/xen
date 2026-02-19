@@ -1049,6 +1049,175 @@ class ExportRequest(BaseModel):
     zoom_level: float = 1.0  # 1.0 - 10.0
     mouse_padding: int = 100  # piksele wokół myszy
     watermark: bool = False
+    transitions: dict | None = None  # {frame_index_str: {type, duration}} per-frame transitions
+
+
+def _make_transition_frames(img_a: "Image.Image", img_b: "Image.Image",
+                             tr_type: str, duration: float, fps: int) -> list:
+    """Generate PIL interpolation frames for a transition between img_a and img_b."""
+    import math
+    n = max(1, round(duration * fps))
+    frames = []
+    w, h = img_a.size
+
+    for i in range(n):
+        t = (i + 1) / (n + 1)  # 0 < t < 1
+
+        if tr_type == "fade":
+            frame = Image.blend(img_a, img_b, t)
+
+        elif tr_type == "pixelize":
+            # Shrink then grow block size: large at t=0.5
+            max_block = max(4, min(w, h) // 8)
+            block = max(1, int(max_block * math.sin(t * math.pi)))
+            base = Image.blend(img_a, img_b, t)
+            if block > 1:
+                small = base.resize((max(1, w // block), max(1, h // block)), Image.NEAREST)
+                frame = small.resize((w, h), Image.NEAREST)
+            else:
+                frame = base
+
+        elif tr_type == "blur":
+            from PIL import ImageFilter
+            radius = max(0, 20 * math.sin(t * math.pi))
+            frame = Image.blend(img_a, img_b, t).filter(ImageFilter.GaussianBlur(radius=radius))
+
+        elif tr_type == "slide_left":
+            offset = int(w * t)
+            frame = Image.new("RGB", (w, h))
+            frame.paste(img_a.crop((offset, 0, w, h)), (0, 0))
+            frame.paste(img_b.crop((0, 0, offset, h)), (w - offset, 0))
+
+        elif tr_type == "slide_right":
+            offset = int(w * t)
+            frame = Image.new("RGB", (w, h))
+            frame.paste(img_a.crop((0, 0, w - offset, h)), (offset, 0))
+            frame.paste(img_b.crop((w - offset, 0, w, h)), (0, 0))
+
+        else:
+            frame = Image.blend(img_a, img_b, t)
+
+        frames.append(frame)
+    return frames
+
+
+def _ffmpeg_xfade_export(previews, tr_map, preview_dir, output_path,
+                         duration_per_frame, fps, tw, th, codec, extra_args=None):
+    """Build and run an ffmpeg command using xfade filter for transitions.
+    Falls back to simple concat when no transitions are configured or xfade fails."""
+    import tempfile
+
+    # Map xfade transition names (ffmpeg) from our internal names
+    XFADE_MAP = {
+        "fade":        "fade",
+        "pixelize":    "pixelize",
+        "blur":        "fadeblur",
+        "slide_left":  "slideleft",
+        "slide_right": "slideright",
+    }
+
+    # Collect per-pair transition configs (index i → transition BEFORE previews[i])
+    # tr_configs[i] = (type, duration) for the transition before previews[i], i >= 1
+    tr_configs = []
+    for i in range(1, len(previews)):
+        next_idx = previews[i]["index"]
+        tr_cfg = tr_map.get(str(next_idx), {})
+        tr_type = tr_cfg.get("type", "none")
+        tr_dur = float(tr_cfg.get("duration", 0.3)) if tr_type != "none" else 0.0
+        tr_configs.append((tr_type, tr_dur))
+
+    has_any = any(t != "none" for t, _ in tr_configs)
+
+    if not has_any:
+        # Simple concat path (no transitions)
+        with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as f:
+            for p in previews:
+                fpath = preview_dir / p["filename"]
+                f.write(f"file '{fpath}'\n")
+                f.write(f"duration {duration_per_frame}\n")
+            if previews:
+                last = preview_dir / previews[-1]["filename"]
+                f.write(f"file '{last}'\n")
+            list_file = f.name
+        try:
+            cmd = [
+                'ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', list_file,
+                '-vf', f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', codec, '-r', str(fps),
+            ] + (extra_args or []) + [str(output_path)]
+            subprocess.run(cmd, capture_output=True, check=True)
+        finally:
+            Path(list_file).unlink(missing_ok=True)
+        return
+
+    # xfade path
+    # Each static image needs to be long enough to cover its display time + any
+    # transition overlap from the NEXT clip. We give each input exactly
+    # duration_per_frame seconds; xfade will consume the overlap from both sides.
+    n = len(previews)
+    cmd = ['ffmpeg', '-y']
+    for p in previews:
+        fpath = preview_dir / p["filename"]
+        # -framerate sets the input frame rate for the still image loop
+        cmd += ['-framerate', str(fps), '-loop', '1', '-t', str(duration_per_frame), '-i', str(fpath)]
+
+    # Build filtergraph
+    filter_parts = []
+
+    # Scale + normalize each input stream
+    for i in range(n):
+        filter_parts.append(
+            f'[{i}:v]scale={tw}:{th}:force_original_aspect_ratio=decrease,'
+            f'pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}[v{i}]'
+        )
+
+    # Chain xfade between consecutive pairs.
+    # xfade `offset` = time in the OUTPUT stream when the transition starts.
+    # For a sequence of clips each lasting D seconds with transition T[i] between
+    # clip i-1 and clip i:
+    #   offset[1] = D - T[0]
+    #   offset[2] = offset[1] + D - T[1]   (each clip adds D, minus overlap T)
+    #   ...
+    # i.e. offset[i] = i*D - sum(T[0..i-1])
+    prev_label = 'v0'
+    cumulative_offset = 0.0
+    for i in range(1, n):
+        tr_type, tr_dur = tr_configs[i - 1]
+        # offset = start of this transition in output timeline
+        cumulative_offset += duration_per_frame - tr_dur
+        out_label = f'xf{i}' if i < n - 1 else 'out'
+
+        if tr_type == "none":
+            # No transition: just concatenate (use xfade with duration=0 is invalid;
+            # use concat filter instead for this pair)
+            filter_parts.append(
+                f'[{prev_label}][v{i}]concat=n=2:v=1:a=0[{out_label}]'
+            )
+        else:
+            xfade_name = XFADE_MAP.get(tr_type, "fade")
+            filter_parts.append(
+                f'[{prev_label}][v{i}]xfade=transition={xfade_name}:'
+                f'duration={tr_dur:.3f}:offset={cumulative_offset:.3f}[{out_label}]'
+            )
+            # After xfade the output stream is shorter by tr_dur, so next offset
+            # must account for that — already handled by subtracting tr_dur above.
+
+        prev_label = out_label
+
+    filtergraph = ';'.join(filter_parts)
+    cmd += ['-filter_complex', filtergraph, '-map', '[out]', '-c:v', codec, '-r', str(fps)]
+    cmd += (extra_args or [])
+    cmd += [str(output_path)]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ffmpeg xfade failed (rc={result.returncode}): "
+                f"{result.stderr.decode(errors='replace')[-600:]}"
+            )
+    except FileNotFoundError:
+        raise RuntimeError("ffmpeg not found")
 
 
 @app.post("/api/sessions/{name}/export")
@@ -1105,68 +1274,66 @@ async def export_session(name: str, req: ExportRequest):
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    # Helper: resolve per-frame transition config
+    tr_map = req.transitions or {}  # {"frame_idx_str": {"type": ..., "duration": ...}}
+
     if req.format == "gif":
-        # Generuj GIF
+        # Generuj GIF z przejściami (PIL)
         output_name = f"{name}_{req.preset}_{timestamp}.gif"
         output_path = export_dir / output_name
-        images = []
-        for p in crop_result["previews"]:
-            img = Image.open(preview_dir / p["filename"])
-            images.append(img)
-        if images:
-            # Calculate quality for GIF (1-100, where 100 is best)
+        previews = crop_result["previews"]
+        raw_images = [Image.open(preview_dir / p["filename"]).convert("RGB") for p in previews]
+
+        gif_frames = []
+        gif_durations = []
+        frame_ms = int(req.duration_per_frame * 1000)
+        tr_frame_ms = max(40, 1000 // max(req.fps, 1))  # ms per transition frame
+
+        for i, img in enumerate(raw_images):
+            gif_frames.append(img)
+            gif_durations.append(frame_ms)
+            if i < len(raw_images) - 1:
+                # Check if there's a transition into the NEXT frame
+                next_idx = previews[i + 1]["index"]
+                tr_cfg = tr_map.get(str(next_idx))
+                if tr_cfg and tr_cfg.get("type", "none") != "none":
+                    t_frames = _make_transition_frames(
+                        img, raw_images[i + 1],
+                        tr_cfg["type"], float(tr_cfg.get("duration", 0.3)), req.fps
+                    )
+                    for tf in t_frames:
+                        gif_frames.append(tf)
+                        gif_durations.append(tr_frame_ms)
+
+        if gif_frames:
             gif_quality = max(1, min(100, req.quality))
-            images[0].save(
-                output_path, save_all=True, append_images=images[1:],
-                duration=int(req.duration_per_frame * 1000), loop=0, optimize=True,
-                quality=gif_quality
+            gif_frames[0].save(
+                output_path, save_all=True, append_images=gif_frames[1:],
+                duration=gif_durations, loop=0, optimize=True, quality=gif_quality
             )
 
     elif req.format == "webm":
-        # Generuj WebM
+        # Generuj WebM z przejściami (ffmpeg xfade)
         output_name = f"{name}_{req.preset}_{timestamp}.webm"
         output_path = export_dir / output_name
-
-        # Użyj ffmpeg do złożenia WebM
-        import tempfile
-        with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as f:
-            for p in crop_result["previews"]:
-                fpath = preview_dir / p["filename"]
-                f.write(f"file '{fpath}'\n")
-                f.write(f"duration {req.duration_per_frame}\n")
-            # Powtórz ostatni aby uniknąć obcięcia
-            if crop_result["previews"]:
-                last = preview_dir / crop_result["previews"][-1]["filename"]
-                f.write(f"file '{last}'\n")
-            list_file = f.name
-
+        previews = crop_result["previews"]
+        crf = max(10, min(50, 60 - req.quality // 2))
         try:
-            # Calculate CRF based on quality (lower CRF = higher quality)
-            # Quality 10-100 -> CRF 50-10 (inverted scale)
-            crf = max(10, min(50, 60 - req.quality // 2))
-            bitrate = f"{max(500, req.quality * 20)}k"
-            
-            cmd = [
-                'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
-                '-i', list_file,
-                '-vf', f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2',
-                '-c:v', 'libvpx-vp9', '-crf', str(crf), '-b:v', bitrate,
-                '-r', str(req.fps),
-                str(output_path),
-            ]
-            subprocess.run(cmd, capture_output=True, check=True)
-        except subprocess.CalledProcessError:
-            # Fallback: GIF jeśli ffmpeg nie dostępny
+            _ffmpeg_xfade_export(
+                previews, tr_map, preview_dir, output_path,
+                req.duration_per_frame, req.fps, tw, th,
+                codec='libvpx-vp9', extra_args=['-crf', str(crf), '-b:v', '0']
+            )
+        except Exception:
+            # Fallback: GIF
             output_name = output_name.replace('.webm', '.gif')
             output_path = export_dir / output_name
-            images = [Image.open(preview_dir / p["filename"]) for p in crop_result["previews"]]
+            images = [Image.open(preview_dir / p["filename"]).convert("RGB") for p in previews]
             if images:
                 images[0].save(
                     output_path, save_all=True, append_images=images[1:],
                     duration=int(req.duration_per_frame * 1000), loop=0,
                 )
-        finally:
-            Path(list_file).unlink(missing_ok=True)
 
     elif req.format == "zip":
         output_name = f"{name}_{req.preset}_{timestamp}.zip"
@@ -1177,49 +1344,28 @@ async def export_session(name: str, req: ExportRequest):
                 fpath = preview_dir / p["filename"]
                 zf.write(fpath, p["filename"])
 
-    else:  # video
+    else:  # video (mp4)
         output_name = f"{name}_{req.preset}_{timestamp}.mp4"
         output_path = export_dir / output_name
-
-        # Użyj ffmpeg do złożenia wideo
-        import tempfile
-        with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as f:
-            for p in crop_result["previews"]:
-                fpath = preview_dir / p["filename"]
-                f.write(f"file '{fpath}'\n")
-                f.write(f"duration {req.duration_per_frame}\n")
-            # Powtórz ostatni aby uniknąć obcięcia
-            if crop_result["previews"]:
-                last = preview_dir / crop_result["previews"][-1]["filename"]
-                f.write(f"file '{last}'\n")
-            list_file = f.name
-
+        previews = crop_result["previews"]
+        crf = max(18, min(40, 50 - req.quality // 3))
         try:
-            # Calculate CRF based on quality (lower CRF = higher quality)
-            # Quality 10-100 -> CRF 40-18 (inverted scale)
-            crf = max(18, min(40, 50 - req.quality // 3))
-            
-            cmd = [
-                'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
-                '-i', list_file,
-                '-vf', f'scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2',
-                '-c:v', 'libx264', '-crf', str(crf), '-pix_fmt', 'yuv420p',
-                '-movflags', '+faststart', '-r', str(req.fps),
-                str(output_path),
-            ]
-            subprocess.run(cmd, capture_output=True, check=True)
-        except subprocess.CalledProcessError:
-            # Fallback: GIF jeśli ffmpeg nie dostępny
+            _ffmpeg_xfade_export(
+                previews, tr_map, preview_dir, output_path,
+                req.duration_per_frame, req.fps, tw, th,
+                codec='libx264',
+                extra_args=['-crf', str(crf), '-pix_fmt', 'yuv420p', '-movflags', '+faststart']
+            )
+        except Exception:
+            # Fallback: GIF
             output_name = output_name.replace('.mp4', '.gif')
             output_path = export_dir / output_name
-            images = [Image.open(preview_dir / p["filename"]) for p in crop_result["previews"]]
+            images = [Image.open(preview_dir / p["filename"]).convert("RGB") for p in previews]
             if images:
                 images[0].save(
                     output_path, save_all=True, append_images=images[1:],
                     duration=int(req.duration_per_frame * 1000), loop=0,
                 )
-        finally:
-            Path(list_file).unlink(missing_ok=True)
 
     # Log export completion
     end_time = datetime.now()

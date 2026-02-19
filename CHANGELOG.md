@@ -1,3 +1,26 @@
+## [0.1.19] - 2026-02-19
+
+### Summary
+
+refactor(tests): deep code analysis engine with 4 supporting modules
+
+### Docs
+
+- docs: update README
+
+### Test
+
+- update tests/test_capture_backends.py
+- update tests/test_e2e.py
+- update tests/test_server_api.py
+- update tests/test_xen_capture.py
+
+### Other
+
+- update xeen/server.py
+- update xeen/templates/index.html
+
+
 ## [0.1.18] - 2026-02-19
 
 ### Summary
