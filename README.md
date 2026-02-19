@@ -36,6 +36,11 @@ pip install -e .
 # Linux/Mac: ffmpeg
 sudo apt install ffmpeg   # Ubuntu/Debian
 brew install ffmpeg        # macOS
+
+# Capture wymaga środowiska GUI:
+# - Lokalne środowisko z desktopem (nie headless)
+# - SSH z przekierowaniem X11: ssh -X user@host
+# - Ustawiona zmienna DISPLAY (np. export DISPLAY=:0)
 ```
 
 ## Użycie
@@ -91,7 +96,22 @@ xeen server --no-browser
 
 ### 3. Upload zewnętrznych screenshotów
 
-Możesz też przeciągnąć pliki PNG/JPG bezpośrednio do przeglądarki (Tab 1) — bez `xeen capture`.
+Gdy `xeen capture` nie działa (środowisko headless, brak GUI), możesz użyć przeglądarki:
+
+```bash
+# Uruchom serwer edycji
+xeen server
+```
+
+W przeglądarze (Tab 1):
+- **Przeciągnij pliki PNG/JPG** bezpośrednio na stronę
+- **Kliknij "Wybierz pliki"** aby wybrać screenshoty z komputera
+- **Zrób screenshoty ręcznie** (np. PrintScreen, zrzuty ekranu systemowe) i prześlij
+
+To idealna alternatywa dla:
+- Serwerów bez GUI (headless)
+- Połączeń SSH bez przekierowania X11
+- Środowisk wirtualnych i kontenerów
 
 ### 4. Lista sesji
 

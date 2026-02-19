@@ -1,3 +1,27 @@
+## [0.1.9] - 2026-02-19
+
+### Summary
+
+feat(docs): CLI interface improvements
+
+### Docs
+
+- docs: update README
+
+### Other
+
+- update project.functions.toon
+- update project.toon-schema.json
+- update xeen/capture.py
+- update xeen/capture_backends.py
+- update xeen/cli.py
+- update xeen/server.py
+- update xeen/static/style.css
+- update xeen/templates/capture.html
+- update xeen/templates/index.html
+- update xeen/templates/sessions.html
+
+
 ## [0.1.8] - 2026-02-19
 
 ### Summary

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>xeen — Browser Screen Capture</title>
+<style>
+:root {
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --surface2: #24243a;
+  --border: #2d2d44;
+  --text: #e4e4ef;
+  --text2: #8888aa;
+  --accent: #7c5cfc;
+  --accent2: #5c9cfc;
+  --green: #4cda8a;
+  --red: #fc5c7c;
+  --orange: #fcac5c;
+  --radius: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+}
+.header h1 { font-size: 20px; font-weight: 700; }
+.header h1 span { color: var(--accent); }
+
+.content { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+.info-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 24px;
+}
+.info-box h3 { margin-bottom: 8px; }
+.info-box p { color: var(--text2); font-size: 14px; line-height: 1.6; }
+.info-box code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+
+.controls {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.btn {
+  padding: 10px 20px; border-radius: 8px; font-size: 14px;
+  font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
+}
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #6b4be0; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-danger { background: var(--red); color: white; }
+.btn-danger:hover { background: #e04060; }
+.btn-success { background: var(--green); color: #111; }
+.btn-success:hover { background: #3cc07a; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+.settings {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.setting { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
+.setting input { width: 60px; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 13px; text-align: center; }
+
+.status-bar {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px;
+  margin-bottom: 24px; font-size: 14px;
+}
+.status-bar .status-label { color: var(--text2); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.status-bar .status-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+.status-bar .recording { color: var(--red); }
+.status-bar .ready { color: var(--green); }
+.status-bar .done { color: var(--accent); }
+
+.status-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 16px;
+}
+
+.preview-area {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 24px;
+  min-height: 200px; display: flex; align-items: center; justify-content: center;
+}
+.preview-area video {
+  max-width: 100%; max-height: 400px; border-radius: 6px;
+}
+.preview-area .placeholder { color: var(--text2); text-align: center; }
+
+.frame-strip {
+  display: flex; gap: 8px; overflow-x: auto; padding: 8px 0;
+  margin-bottom: 24px;
+}
+.frame-strip img {
+  height: 80px; border-radius: 6px; border: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.frame-strip img.latest { border-color: var(--accent); }
+
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--surface2); border: 1px solid var(--green);
+  padding: 12px 20px; border-radius: 8px; font-size: 13px;
+  transform: translateY(80px); opacity: 0; transition: all 0.3s;
+  z-index: 1000;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📹 <span>xeen</span> browser capture</h1>
+  <a href="/" class="btn btn-outline">← Edytor</a>
+</div>
+
+<div class="content">
+
+  <div class="info-box">
+    <h3>🌐 Przechwytywanie ekranu przez przeglądarkę</h3>
+    <p>
+      Przeglądarka użyje <code>getDisplayMedia</code> API do przechwycenia Twojego ekranu.
+      Kliknij <strong>"Rozpocznij nagrywanie"</strong> — przeglądarka poprosi o wybranie ekranu/okna do udostępnienia.
+      Klatki będą automatycznie zapisywane co ustalony interwał.
+    </p>
+  </div>
+
+  <div class="settings">
+    <div class="setting">
+      <label>Czas (s):</label>
+      <input type="number" id="duration" value="10" min="1" max="30">
+    </div>
+    <div class="setting">
+      <label>Interwał (s):</label>
+      <input type="number" id="interval" value="1" min="0.5" max="5" step="0.5">
+    </div>
+    <div class="setting">
+      <label>Max klatek:</label>
+      <input type="number" id="maxFrames" value="15" min="1" max="30">
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" id="btnStart" onclick="startCapture()">
+      🔴 Rozpocznij nagrywanie
+    </button>
+    <button class="btn btn-danger hidden" id="btnStop" onclick="stopCapture()">
+      ⏹ Zatrzymaj
+    </button>
+    <button class="btn btn-success hidden" id="btnFinish" onclick="finishAndEdit()">
+      ✅ Zakończ i edytuj →
+    </button>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-grid">
+      <div>
+        <div class="status-label">Status</div>
+        <div class="status-value ready" id="statusText">Gotowy</div>
+      </div>
+      <div>
+        <div class="status-label">Klatki</div>
+        <div class="status-value" id="frameCount">0</div>
+      </div>
+      <div>
+        <div class="status-label">Czas</div>
+        <div class="status-value" id="elapsedTime">0.0s</div>
+      </div>
+      <div>
+        <div class="status-label">Sesja</div>
+        <div class="status-value" id="sessionName">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-area" id="previewArea">
+    <div class="placeholder">
+      <p>🖥️ Podgląd ekranu pojawi się po rozpoczęciu nagrywania</p>
+    </div>
+  </div>
+
+  <div class="frame-strip" id="frameStrip"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<canvas id="captureCanvas" style="display:none"></canvas>
+
+<script>
+let mediaStream = null;
+let videoEl = null;
+let captureInterval = null;
+let countdownInterval = null;
+let sessionName = '';
+let frameIndex = 0;
+let startTime = 0;
+let maxDuration = 10;
+let captureIntervalMs = 1000;
+let maxFrames = 15;
+
+async function startCapture() {
+  maxDuration = parseFloat(document.getElementById('duration').value) || 10;
+  captureIntervalMs = (parseFloat(document.getElementById('interval').value) || 1) * 1000;
+  maxFrames = parseInt(document.getElementById('maxFrames').value) || 15;
+
+  try {
+    mediaStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { cursor: 'always', frameRate: 5 },
+      audio: false,
+    });
+  } catch (e) {
+    toast('❌ Odmówiono dostępu do ekranu: ' + e.message);
+    return;
+  }
+
+  // Setup session
+  const now = new Date();
+  sessionName = 'browser_' + now.toISOString().replace(/[-:T]/g, '').slice(0, 15);
+  frameIndex = 0;
+  startTime = Date.now();
+
+  // Show video preview
+  const preview = document.getElementById('previewArea');
+  preview.innerHTML = '';
+  videoEl = document.createElement('video');
+  videoEl.srcObject = mediaStream;
+  videoEl.autoplay = true;
+  videoEl.muted = true;
+  videoEl.playsInline = true;
+  preview.appendChild(videoEl);
+
+  // Update UI
+  document.getElementById('btnStart').classList.add('hidden');
+  document.getElementById('btnStop').classList.remove('hidden');
+  document.getElementById('sessionName').textContent = sessionName;
+  updateStatus('recording', '🔴 Nagrywam...');
+
+  // Handle stream ending (user clicks "Stop sharing")
+  mediaStream.getVideoTracks()[0].onended = () => stopCapture();
+
+  // Start capturing frames
+  captureInterval = setInterval(() => captureFrame(), captureIntervalMs);
+  // Capture first frame immediately
+  setTimeout(() => captureFrame(), 300);
+
+  // Countdown timer
+  countdownInterval = setInterval(() => {
+    const elapsed = (Date.now() - startTime) / 1000;
+    document.getElementById('elapsedTime').textContent = elapsed.toFixed(1) + 's';
+
+    if (elapsed >= maxDuration) {
+      stopCapture();
+    }
+  }, 100);
+}
+
+async function captureFrame() {
+  if (!videoEl || !mediaStream || frameIndex >= maxFrames) {
+    if (frameIndex >= maxFrames) stopCapture();
+    return;
+  }
+
+  const canvas = document.getElementById('captureCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // Wait for video to have dimensions
+  if (videoEl.videoWidth === 0) return;
+
+  canvas.width = videoEl.videoWidth;
+  canvas.height = videoEl.videoHeight;
+  ctx.drawImage(videoEl, 0, 0);
+
+  const imageData = canvas.toDataURL('image/png');
+
+  try {
+    const res = await fetch('/api/capture/frame', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_name: sessionName,
+        frame_index: frameIndex,
+        image_data: imageData,
+      }),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      // Add thumbnail to strip
+      const strip = document.getElementById('frameStrip');
+      // Remove 'latest' class from previous thumbnails
+      strip.querySelectorAll('img.latest').forEach(img => img.classList.remove('latest'));
+
+      const thumb = document.createElement('img');
+      thumb.src = imageData;
+      thumb.classList.add('latest');
+      thumb.title = `Klatka ${frameIndex + 1} (${data.width}×${data.height})`;
+      strip.appendChild(thumb);
+
+      frameIndex++;
+      document.getElementById('frameCount').textContent = frameIndex;
+    }
+  } catch (e) {
+    console.error('Frame capture error:', e);
+  }
+}
+
+function stopCapture() {
+  if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
+  if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+
+  document.getElementById('btnStop').classList.add('hidden');
+  document.getElementById('btnFinish').classList.remove('hidden');
+  document.getElementById('btnStart').classList.remove('hidden');
+
+  const elapsed = (Date.now() - startTime) / 1000;
+  document.getElementById('elapsedTime').textContent = elapsed.toFixed(1) + 's';
+
+  if (frameIndex > 0) {
+    updateStatus('done', `✅ ${frameIndex} klatek`);
+    toast(`Nagrano ${frameIndex} klatek w ${elapsed.toFixed(1)}s`);
+  } else {
+    updateStatus('ready', 'Gotowy');
+    toast('⚠️ Nie przechwycono żadnych klatek');
+  }
+}
+
+async function finishAndEdit() {
+  const elapsed = (Date.now() - startTime) / 1000;
+
+  try {
+    const res = await fetch('/api/capture/finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_name: sessionName,
+        frame_count: frameIndex,
+        duration: elapsed,
+      }),
+    });
+    const data = await res.json();
+    toast(`Sesja ${data.name} zapisana (${data.frame_count} klatek)`);
+
+    // Redirect to editor
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 500);
+  } catch (e) {
+    toast('❌ Błąd zapisu: ' + e.message);
+  }
+}
+
+function updateStatus(cls, text) {
+  const el = document.getElementById('statusText');
+  el.className = 'status-value ' + cls;
+  el.textContent = text;
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

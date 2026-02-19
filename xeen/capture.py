@@ -1,4 +1,8 @@
-"""Screen capture with metadata collection (mouse, keyboard, change detection)."""
+"""Screen capture with metadata collection (mouse, keyboard, change detection).
+
+Uses automatic backend fallback chain:
+mss → Pillow → system tools → browser Screen Capture API
+"""
 
 import json
 import time
@@ -11,6 +15,7 @@ import numpy as np
 from PIL import Image
 
 from xeen.config import get_data_dir
+from xeen.capture_backends import detect_backend, BrowserCaptureNeeded, CaptureBackend
 
 
 @dataclass
@@ -202,8 +207,10 @@ class CaptureSession:
         self._start_time = 0.0
 
     def run(self):
-        """Uruchom sesję nagrywania."""
-        import mss
+        """Uruchom sesję nagrywania z automatycznym fallback backendów."""
+        print("  🔄 Wykrywanie backendu capture...")
+        backend = detect_backend(verbose=True)  # raises BrowserCaptureNeeded
+        print(f"  ✅ Backend: {backend.name}\n")
 
         self._running = True
         self._start_time = time.monotonic()
@@ -212,73 +219,77 @@ class CaptureSession:
         last_capture_ts = 0.0
         last_event_ts = 0.0
 
-        with mss.mss() as sct:
-            monitors = sct.monitors
-            mon = monitors[self.monitor] if self.monitor < len(monitors) else monitors[0]
+        while self._running:
+            now = time.monotonic()
+            elapsed = now - self._start_time
 
-            while self._running:
-                now = time.monotonic()
-                elapsed = now - self._start_time
+            if elapsed >= self.duration:
+                break
 
-                if elapsed >= self.duration:
-                    break
+            time_since_last = now - last_capture_ts
 
-                time_since_last = now - last_capture_ts
-
-                # Minimalna przerwa
-                if time_since_last < self.min_interval:
-                    time.sleep(0.05)
-                    continue
-
-                # Zrób screenshot
-                raw = sct.grab(mon)
-                img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
-                arr = np.array(img)
-
-                change = compute_change_pct(self._prev_array, arr)
-
-                # Decyzja: zapisać klatkę?
-                should_save = False
-                if len(self.frames) == 0:
-                    should_save = True  # Zawsze pierwsza klatka
-                elif change >= self.change_threshold:
-                    should_save = True  # Zmiana na ekranie
-                elif time_since_last >= self.interval:
-                    should_save = True  # Minął interwał
-
-                if should_save and len(self.frames) < 15:  # Max 15 klatek
-                    frame_idx = len(self.frames)
-                    filename = f"frame_{frame_idx:04d}.png"
-                    filepath = self.session_dir / "frames" / filename
-                    img.save(filepath, "PNG", optimize=True)
-
-                    mx, my = self.tracker.get_mouse_position()
-
-                    # Zbierz events od ostatniego zapisu
-                    events = self.tracker.get_events_since(last_event_ts)
-                    last_event_ts = elapsed
-
-                    frame = FrameMeta(
-                        index=frame_idx,
-                        timestamp=round(elapsed, 3),
-                        filename=filename,
-                        width=img.width,
-                        height=img.height,
-                        change_pct=round(change, 2),
-                        mouse_x=mx,
-                        mouse_y=my,
-                        suggested_center_x=mx if mx > 0 else img.width // 2,
-                        suggested_center_y=my if my > 0 else img.height // 2,
-                        input_events=events,
-                    )
-                    self.frames.append(frame)
-                    self._prev_array = arr
-                    last_capture_ts = now
-
-                    indicator = "🔴" if change > 20 else "🟡" if change > 5 else "🟢"
-                    print(f"  {indicator} Klatka {frame_idx+1:>2} | {elapsed:5.1f}s | zmiana: {change:5.1f}% | mysz: ({mx},{my})")
-
+            # Minimalna przerwa
+            if time_since_last < self.min_interval:
                 time.sleep(0.05)
+                continue
+
+            # Zrób screenshot przez wykryty backend
+            try:
+                img = backend.grab(self.monitor)
+                arr = np.array(img)
+            except Exception as e:
+                print(f"\n  ⚠️  Błąd capture: {e}")
+                # Próbuj ponownie wykryć backend (może się coś zmieniło)
+                try:
+                    backend = detect_backend(verbose=False)
+                    continue
+                except BrowserCaptureNeeded:
+                    raise
+
+            change = compute_change_pct(self._prev_array, arr)
+
+            # Decyzja: zapisać klatkę?
+            should_save = False
+            if len(self.frames) == 0:
+                should_save = True  # Zawsze pierwsza klatka
+            elif change >= self.change_threshold:
+                should_save = True  # Zmiana na ekranie
+            elif time_since_last >= self.interval:
+                should_save = True  # Minął interwał
+
+            if should_save and len(self.frames) < 15:  # Max 15 klatek
+                frame_idx = len(self.frames)
+                filename = f"frame_{frame_idx:04d}.png"
+                filepath = self.session_dir / "frames" / filename
+                img.save(filepath, "PNG", optimize=True)
+
+                mx, my = self.tracker.get_mouse_position()
+
+                # Zbierz events od ostatniego zapisu
+                events = self.tracker.get_events_since(last_event_ts)
+                last_event_ts = elapsed
+
+                frame = FrameMeta(
+                    index=frame_idx,
+                    timestamp=round(elapsed, 3),
+                    filename=filename,
+                    width=img.width,
+                    height=img.height,
+                    change_pct=round(change, 2),
+                    mouse_x=mx,
+                    mouse_y=my,
+                    suggested_center_x=mx if mx > 0 else img.width // 2,
+                    suggested_center_y=my if my > 0 else img.height // 2,
+                    input_events=events,
+                )
+                self.frames.append(frame)
+                self._prev_array = arr
+                last_capture_ts = now
+
+                indicator = "🔴" if change > 20 else "🟡" if change > 5 else "🟢"
+                print(f"  {indicator} Klatka {frame_idx+1:>2} | {elapsed:5.1f}s | zmiana: {change:5.1f}% | mysz: ({mx},{my})")
+
+            time.sleep(0.05)
 
         self.stop()
 

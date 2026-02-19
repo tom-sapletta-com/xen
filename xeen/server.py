@@ -64,6 +64,27 @@ async def get_session(name: str):
     return json.loads(meta_file.read_text())
 
 
+@app.get("/api/sessions/{name}/thumbnails")
+async def get_session_thumbnails(name: str, limit: int = 9):
+    """Pobierz pierwsze N klatek sesji jako thumbnails."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404, "Session not found")
+    meta = json.loads(meta_file.read_text())
+    frames = meta.get("frames", [])[:limit]
+    return {
+        "name": name,
+        "thumbnails": [
+            {
+                "index": f["index"],
+                "filename": f["filename"],
+                "url": f"/api/sessions/{name}/frames/{f['filename']}"
+            }
+            for f in frames
+        ]
+    }
+
+
 @app.get("/api/sessions/{name}/frames/{filename}")
 async def get_frame_image(name: str, filename: str):
     """Zwróć obraz klatki."""
@@ -79,6 +100,32 @@ async def delete_session(name: str):
     session_dir = data_dir() / "sessions" / name
     if session_dir.exists():
         shutil.rmtree(session_dir)
+    return {"ok": True}
+
+
+@app.delete("/api/sessions/{name}/frames/{filename}")
+async def delete_frame(name: str, filename: str):
+    """Usuń pojedynczą klatkę z sesji i zaktualizuj session.json."""
+    session_dir = data_dir() / "sessions" / name
+    filepath = session_dir / "frames" / filename
+    if not filepath.exists():
+        raise HTTPException(404, "Frame not found")
+
+    filepath.unlink()
+
+    meta_file = session_dir / "session.json"
+    if meta_file.exists():
+        meta = json.loads(meta_file.read_text())
+        meta["frames"] = [f for f in meta.get("frames", []) if f["filename"] != filename]
+        meta["frame_count"] = len(meta["frames"])
+        for i, f in enumerate(meta["frames"]):
+            f["index"] = i
+        if "selected_frames" in meta:
+            meta["selected_frames"] = [
+                i for i in range(len(meta["frames"]))
+            ]
+        meta_file.write_text(json.dumps(meta, indent=2))
+
     return {"ok": True}
 
 
@@ -417,9 +464,130 @@ async def get_social_links():
     return SOCIAL_LINKS
 
 
+# ─── API: Browser Screen Capture ─────────────────────────────────────────────
+
+class BrowserCaptureFrame(BaseModel):
+    session_name: str
+    frame_index: int
+    image_data: str  # base64 PNG
+
+
+@app.post("/api/capture/frame")
+async def capture_frame_from_browser(frame: BrowserCaptureFrame):
+    """Receive a single frame from browser Screen Capture API."""
+    import base64
+
+    session_dir = data_dir() / "sessions" / frame.session_name
+    session_dir.mkdir(parents=True, exist_ok=True)
+    (session_dir / "frames").mkdir(exist_ok=True)
+
+    # Decode base64 image
+    img_data = frame.image_data.split(",", 1)[-1]  # strip data:image/png;base64,
+    img_bytes = base64.b64decode(img_data)
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+
+    filename = f"frame_{frame.frame_index:04d}.png"
+    img.save(session_dir / "frames" / filename, "PNG")
+
+    return {
+        "ok": True,
+        "filename": filename,
+        "width": img.width,
+        "height": img.height,
+    }
+
+
+class BrowserCaptureFinalize(BaseModel):
+    session_name: str
+    frame_count: int
+    duration: float
+
+
+@app.post("/api/capture/finalize")
+async def finalize_browser_capture(req: BrowserCaptureFinalize):
+    """Finalize a browser capture session — write session.json."""
+    session_dir = data_dir() / "sessions" / req.session_name
+    frames_dir = session_dir / "frames"
+
+    frames = []
+    for i in range(req.frame_count):
+        filename = f"frame_{i:04d}.png"
+        fpath = frames_dir / filename
+        if fpath.exists():
+            img = Image.open(fpath)
+            frames.append({
+                "index": i,
+                "timestamp": round(i * (req.duration / max(req.frame_count, 1)), 3),
+                "filename": filename,
+                "width": img.width,
+                "height": img.height,
+                "change_pct": 100.0 if i == 0 else 0.0,
+                "mouse_x": img.width // 2,
+                "mouse_y": img.height // 2,
+                "suggested_center_x": img.width // 2,
+                "suggested_center_y": img.height // 2,
+                "input_events": [],
+            })
+
+    meta = {
+        "name": req.session_name,
+        "created_at": datetime.utcnow().isoformat(),
+        "duration": req.duration,
+        "frame_count": len(frames),
+        "settings": {"source": "browser_capture"},
+        "frames": frames,
+        "input_log": [],
+    }
+    (session_dir / "session.json").write_text(json.dumps(meta, indent=2))
+    return {"name": req.session_name, "frame_count": len(frames)}
+
+
+@app.get("/api/capture/backends")
+async def get_capture_backends():
+    """Return available capture backends."""
+    from xeen.capture_backends import list_available_backends
+    return list_available_backends()
+
+
 # ─── Frontend ─────────────────────────────────────────────────────────────────
+
+@app.get("/capture", response_class=HTMLResponse)
+async def capture_page():
+    """Browser-based screen capture page."""
+    template = Path(__file__).parent / "templates" / "capture.html"
+    return HTMLResponse(template.read_text())
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
+    """Session selection page - grid of last 9 sessions with thumbnails."""
+    template = Path(__file__).parent / "templates" / "sessions.html"
+    return HTMLResponse(template.read_text())
+
+
+@app.get("/session/{name}", response_class=HTMLResponse)
+async def session_page(name: str):
+    """Editor page for a specific session."""
+    template = Path(__file__).parent / "templates" / "index.html"
+    return HTMLResponse(template.read_text())
+
+
+@app.get("/session/{name}/tab/{tab_name}", response_class=HTMLResponse)
+async def session_tab_page(name: str, tab_name: str):
+    """Editor page for a specific session and tab."""
+    template = Path(__file__).parent / "templates" / "index.html"
+    return HTMLResponse(template.read_text())
+
+
+@app.get("/session/{name}/frame/{frame_index}", response_class=HTMLResponse)
+async def session_frame_page(name: str, frame_index: int):
+    """Editor page focused on a specific frame."""
+    template = Path(__file__).parent / "templates" / "index.html"
+    return HTMLResponse(template.read_text())
+
+
+@app.get("/session/{name}/export/{export_id}", response_class=HTMLResponse)
+async def session_export_page(name: str, export_id: str):
+    """Export page for a specific session."""
     template = Path(__file__).parent / "templates" / "index.html"
     return HTMLResponse(template.read_text())

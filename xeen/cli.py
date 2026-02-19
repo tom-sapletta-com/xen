@@ -66,6 +66,7 @@ def main():
 def run_capture(args):
     """Uruchom sesję nagrywania."""
     from xeen.capture import CaptureSession
+    from xeen.capture_backends import BrowserCaptureNeeded
 
     session = CaptureSession(
         duration=args.duration,
@@ -85,12 +86,51 @@ def run_capture(args):
     except KeyboardInterrupt:
         print("\n⏹  Przerwano")
         session.stop()
+    except BrowserCaptureNeeded:
+        print("\n  🌐 Automatyczne przełączenie na przechwytywanie przez przeglądarkę...")
+        print("     Uruchamiam serwer z trybem capture...\n")
+        _fallback_to_browser_capture()
+        return
+    except RuntimeError as e:
+        if "Brak dostępu do ekranu" in str(e):
+            print("\n  🌐 Automatyczne przełączenie na przechwytywanie przez przeglądarkę...")
+            _fallback_to_browser_capture()
+            return
+        raise
 
     summary = session.summary()
     print(f"\n✅ Sesja: {summary['name']}")
     print(f"   📸 {summary['frame_count']} klatek | {summary['duration']:.1f}s")
     print(f"   📁 {summary['path']}")
-    print(f"\n   Uruchom 'xeen' aby edytować w przeglądarce")
+    print(f"\n   Uruchom 'xeen server' aby edytować w przeglądarce")
+
+
+def _fallback_to_browser_capture(port: int = 7600, host: str = "127.0.0.1"):
+    """Start server and open browser capture page as fallback."""
+    import uvicorn
+    from xeen.config import get_data_dir
+
+    data_dir = get_data_dir()
+    os.environ["XEEN_DATA_DIR"] = str(data_dir)
+
+    url = f"http://{host}:{port}/capture"
+
+    def open_browser():
+        time.sleep(1.0)
+        webbrowser.open(url)
+    threading.Thread(target=open_browser, daemon=True).start()
+
+    print(f"  📹 xeen browser capture → {url}")
+    print(f"     Dane: {data_dir}")
+    print(f"\n     Przeglądarka otworzy stronę z przechwytywaniem ekranu.")
+    print(f"     Naciśnij Ctrl+C aby zakończyć serwer.\n")
+
+    uvicorn.run(
+        "xeen.server:app",
+        host=host,
+        port=port,
+        log_level="warning",
+    )
 
 
 def run_server(args):

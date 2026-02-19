@@ -1,0 +1,85 @@
+project: xeen
+generated: "2026-02-19T17:52:34.271354"
+modules[8]{path,lang,items}:
+  tests/test_xen_capture.py,python,2
+  xeen/config.py,python,1
+  xeen/cli.py,python,5
+  xeen/capture.py,python,11
+  xeen/server.py,python,26
+  xeen/__init__.py,python,0
+  xeen/__main__.py,python,0
+  xeen/capture_backends.py,python,15
+
+function_details:
+  tests/test_xen_capture.py:
+    functions[2]{name,kind,sig,loc,async,lines,cc,does}:
+      test_placeholder,function,(),4-6,false,3,1,Placeholder test to verify the test setup works.
+      test_import,function,(),9-11,false,3,1,Verify the main package can be imported.
+  xeen/config.py:
+    functions[1]{name,kind,sig,loc,async,lines,cc,does}:
+      get_data_dir,function,() -> Path,7-17,false,11,2,Zwróć katalog danych xeen.
+  xeen/cli.py:
+    functions[5]{name,kind,sig,loc,async,lines,cc,does}:
+      main,function,(),11-63,false,53,5,main
+      run_capture,function,(args),66-105,false,40,5,Uruchom sesję nagrywania.
+      _fallback_to_browser_capture,function,"(port:int=7600, host:str='127.0.0.1')",108-133,false,26,1,Start server and open browser capture page as fallback.
+      run_server,function,(args),136-160,false,25,3,Uruchom serwer WWW.
+      run_list,function,(args),163-188,false,26,5,Pokaż listę sesji.
+  xeen/capture.py:
+    functions[11]{name,kind,sig,loc,async,lines,cc,does}:
+      compute_change_pct,function,"(img_a:Any, img_b:Any) -> float",162-177,false,16,4,Oblicz % zmiany między dwoma obrazami (downsampled dla szybkości).
+      InputTracker.__init__,method,(),51-60,false,10,1,creates
+      InputTracker.start,method,(),62-141,false,80,2,starts
+      InputTracker.stop,method,(),143-148,false,6,3,stops
+      InputTracker.get_events_since,method,"(since_ts:float) -> list[dict]",150-156,false,7,3,Pobierz zdarzenia od danego timestampa.
+      InputTracker.get_mouse_position,method,"() -> tuple[int, int]",158-159,false,2,1,retrieves mouse position
+      CaptureSession.__init__,method,"(duration:float=10.0, interval:float=1.0, min_interval:float=0.5, change_threshold:float=5.0, name:Any=None, monitor:int=0)",183-207,false,25,2,creates
+      CaptureSession.run,method,(),209-294,false,86,15,Uruchom sesję nagrywania z automatycznym fallback backendów.
+      CaptureSession.stop,method,(),296-300,false,5,1,Zakończ sesję i zapisz metadane.
+      CaptureSession._save_session_meta,method,(),302-321,false,20,4,Zapisz metadane sesji do pliku JSON.
+      CaptureSession.summary,method,() -> dict,323-329,false,7,2,summary
+  xeen/server.py:
+    functions[26]{name,kind,sig,loc,async,lines,cc,does}:
+      data_dir,function,() -> Path,32-33,false,2,1,data dir
+      list_sessions,function,(),39-55,true,17,4,Lista wszystkich sesji nagrywania.
+      get_session,function,"(name:str)",59-64,true,6,2,Pobierz szczegóły sesji.
+      get_session_thumbnails,function,"(name:str, limit:int=9)",68-85,true,18,3,Pobierz pierwsze N klatek sesji jako thumbnails.
+      get_frame_image,function,"(name:str, filename:str)",89-94,true,6,2,Zwróć obraz klatki.
+      delete_session,function,"(name:str)",98-103,true,6,2,Usuń sesję.
+      delete_frame,function,"(name:str, filename:str)",107-129,true,23,8,Usuń pojedynczą klatkę z sesji i zaktualizuj session.json.
+      upload_screenshots,function,"(files:list[UploadFile]=File(...))",135-174,true,40,3,Upload zewnętrznych screenshotów jako nowa sesja.
+      save_frame_selection,function,"(name:str, selection:FrameSelection)",184-192,true,9,2,Zapisz wybór klatek.
+      save_centers,function,"(name:str, marks:CenterMarks)",208-219,true,12,3,Zapisz oznaczenia środków.
+      get_crop_presets,function,(),225-227,true,3,1,Lista presetów przycinania.
+      crop_preview,function,"(name:str, req:CropRequest)",238-316,true,79,12,Generuj podgląd przyciętych klatek.
+      get_preview_image,function,"(name:str, filename:str)",320-324,true,5,2,retrieves preview image
+      generate_versions,function,"(name:str, req:MultiVersionRequest)",335-348,true,14,3,Generuj wiele wersji (presetów) naraz.
+      export_session,function,"(name:str, req:ExportRequest)",363-451,true,89,12,"Eksportuj jako wideo, GIF lub ZIP."
+      download_export,function,"(filename:str)",455-459,true,5,2,download export
+      get_social_links,function,(),463-464,true,2,1,retrieves social links
+      capture_frame_from_browser,function,"(frame:BrowserCaptureFrame)",476-497,true,22,1,Receive a single frame from browser Screen Capture API.
+      finalize_browser_capture,function,"(req:BrowserCaptureFinalize)",507-542,true,36,4,Finalize a browser capture session — write session.json.
+      get_capture_backends,function,(),546-549,true,4,1,Return available capture backends.
+      capture_page,function,(),555-558,true,4,1,Browser-based screen capture page.
+      index,function,(),562-565,true,4,1,Session selection page - grid of last 9 sessions with thumbnails.
+      session_page,function,"(name:str)",569-572,true,4,1,Editor page for a specific session.
+      session_tab_page,function,"(name:str, tab_name:str)",576-579,true,4,1,Editor page for a specific session and tab.
+      session_frame_page,function,"(name:str, frame_index:int)",583-586,true,4,1,Editor page focused on a specific frame.
+      session_export_page,function,"(name:str, export_id:str)",590-593,true,4,1,Export page for a specific session.
+  xeen/capture_backends.py:
+    functions[15]{name,kind,sig,loc,async,lines,cc,does}:
+      detect_backend,function,"(verbose:bool=True) -> CaptureBackend",167-206,false,40,10,Try backends in priority order and return first working one.
+      list_available_backends,function,"() -> list[dict]",209-240,false,32,7,Return info about all backends and their availability.
+      CaptureBackend.grab,method,"(monitor:int=0) -> Image.Image",27-29,false,3,1,Capture a screenshot and return as PIL Image.
+      CaptureBackend.is_available,method,() -> bool,32-34,false,3,1,Check if this backend can work in current environment.
+      CaptureBackend.__repr__,method,(),36-37,false,2,1,repr
+      MssBackend.__init__,method,(),45-47,false,3,1,creates
+      MssBackend.grab,method,"(monitor:int=0) -> Image.Image",49-53,false,5,2,grab
+      MssBackend.is_available,method,() -> bool,56-63,false,8,2,checks available
+      MssBackend.close,method,(),65-66,false,2,1,stops
+      PillowBackend.grab,method,"(monitor:int=0) -> Image.Image",74-79,false,6,2,grab
+      PillowBackend.is_available,method,() -> bool,82-88,false,7,2,checks available
+      SystemToolBackend.__init__,method,(),125-128,false,4,2,creates
+      SystemToolBackend.grab,method,"(monitor:int=0) -> Image.Image",130-148,false,19,3,grab
+      SystemToolBackend._find_tool,method,"() -> Optional[dict]",151-155,false,5,3,retrieves tool
+      SystemToolBackend.is_available,method,() -> bool,158-159,false,2,1,checks available
