@@ -15,13 +15,13 @@ Ale Canva to za dużo kroków. `xeen` robi to w terminalu + przeglądarce.
 ## Jak działa
 
 ```
-┌─────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│ Capture │ ──→ │  Select  │ ──→ │  Center  │ ──→ │   Crop   │ ──→ │ Publish  │
-│ xeen    │     │  Tab 1   │     │  Tab 2   │     │  Tab 3-4 │     │  Tab 5   │
-└─────────┘     └──────────┘     └──────────┘     └──────────┘     └──────────┘
- screenshoty     wybór klatek     środek uwagi     przycinanie       eksport
- + metadane      grid view        click = center   presety SM        MP4/GIF/ZIP
- kursor/kb       max 15           auto z kursora   multi-wersje      social links
+┌─────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+│ Capture │──→│ 1.Select │──→│2.Annotate│──→│ 3.Center │──→│  4.Crop  │──→│5.Captions│──→│6.Publish │
+│ xeen    │   │ klatki   │   │ strzałki │   │ fokus    │   │ presety  │   │ napisy   │   │ eksport  │
+└─────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
+ screenshoty   wybór/usuw.    rysowanie      click=center   SM formaty     ręczne/AI      MP4/GIF/
+ + metadane    duplikaty      tekst, rect    interpolacja   zoom/pad       LLM gen.       WebM/ZIP
+ kursor/kb     sortowanie     kolory         auto z myszy   smart crop     drag&drop      branding
 ```
 
 ## Instalacja
@@ -84,15 +84,16 @@ xeen server -p 8080
 xeen server --no-browser
 ```
 
-**5 zakładek:**
+**6 zakładek:**
 
-| Tab | Funkcja |
-|-----|---------|
-| 1. Wybór klatek | Grid wszystkich klatek, kliknij aby wybrać/odrzucić |
-| 2. Środek | Kliknij na obrazie = punkt centralny. Auto-sugestia z pozycji kursora |
-| 3. Przycinanie | Wybierz preset (Instagram, Twitter, LinkedIn...) → podgląd przycięcia wg środka |
-| 4. Wersje | Generuj kilka formatów naraz, porównaj obok siebie |
-| 5. Publikacja | Eksport MP4/GIF/ZIP + linki do social media |
+| Tab | Funkcja | Narzędzia |
+|-----|---------|-----------|
+| 1. Wybór klatek | Grid klatek — kliknij aby zaznaczyć/usunąć | Duplikaty, sortowanie, odwróć, co N-ta, pierwsze N, zakres czasu, największe zmiany |
+| 2. Adnotacje | Rysuj strzałki, prostokąty, tekst na klatkach | Strzałka, prostokąt, tekst, kolory, grubość, cofnij, wyczyść |
+| 3. Środek | Kliknij na obrazie = punkt fokus | Auto (kursor), środek obrazu, kopiuj do wszystkich, interpoluj, wyczyść |
+| 4. Przycinanie | Preset (Instagram, Twitter, LinkedIn...) → podgląd | Podgląd wszystkich, dopasuj do treści, własny format, resetuj, zoom/pad |
+| 5. Napisy | Dodaj opisy — ręcznie lub przez AI (LLM) | Dodaj, auto 1/klatka, AI generowanie (OpenAI/Anthropic/Ollama/Gemini), drag&drop |
+| 6. Publikacja | Eksport MP4/GIF/WebM/ZIP + branding + social links | Szybki eksport, eksport wszystkich, znak wodny, folder, kopiuj link |
 
 ### 3. Upload zewnętrznych screenshotów
 
@@ -208,19 +209,61 @@ Każda sesja zapisuje `session.json` z:
 }
 ```
 
+## Szybka prezentacja z 3-5 zrzutów ekranu
+
+Najszybszy workflow do stworzenia demo/tutoriala:
+
+```bash
+# 1. Zrób 3-5 zrzutów ekranu (PrintScreen, Flameshot, itp.)
+# 2. Uruchom xeen
+xeen server
+
+# 3. W przeglądarce:
+#    Tab 1: Przeciągnij screenshoty → zaznacz potrzebne
+#    Tab 3: Kliknij "Auto: kursor myszy" (lub ustaw ręcznie)
+#    Tab 4: Wybierz preset np. twitter_post
+#    Tab 6: Kliknij "Generuj wszystkie formaty"
+```
+
+**Wskazówki:**
+- **3 zrzuty** — idealnie na social media post (Twitter, LinkedIn)
+- **5 zrzutów** — dobra ilość na krótki tutorial/changelog
+- **Pomiń Tab 2 (Adnotacje)** jeśli screenshoty są czytelne
+- **Pomiń Tab 5 (Napisy)** jeśli nie potrzebujesz opisów
+- Użyj **"Pierwsze N"** w Tab 1 aby szybko wybrać dokładnie tyle klatek ile potrzebujesz
+- Ustaw **focus=mouse + pad=20%** aby wyciąć istotny fragment ekranu
+
+## FPS — ile klatek nagrywać?
+
+| Interwał | FPS | Zastosowanie |
+|----------|-----|-------------|
+| `1.0s` | 1 | Statyczne demo — klik → screenshot → klik (domyślne) |
+| `0.5s` | 2 | Płynniejsze prezentacje, więcej klatek do wyboru |
+| `0.33s` | 3 | Najlepszy balans: płynność + rozsądna ilość klatek |
+
+**Rekomendacja: 2-3 FPS** (`xeen capture -i 0.5` lub `-i 0.33`).
+- Przy 1 FPS możesz przegapić krótkie interakcje
+- Przy 3 FPS masz wystarczająco dużo materiału bez zalewania dysku
+- Duplikaty można usunąć automatycznie w Tab 1 ("Znajdź duplikaty")
+
 ## API
 
 | Endpoint | Metoda | Opis |
 |----------|--------|------|
 | `/api/sessions` | GET | Lista sesji |
 | `/api/sessions/{name}` | GET | Szczegóły sesji |
+| `/api/sessions/{name}/thumbnails` | GET | Miniaturki (max N) |
 | `/api/sessions/upload` | POST | Upload screenshotów |
 | `/api/sessions/{name}/select` | POST | Zapisz wybór klatek |
-| `/api/sessions/{name}/centers` | POST | Zapisz środki |
-| `/api/sessions/{name}/crop-preview` | POST | Podgląd przycinania |
-| `/api/sessions/{name}/generate-versions` | POST | Multi-format |
-| `/api/sessions/{name}/export` | POST | Eksport MP4/GIF/ZIP |
+| `/api/sessions/{name}/update-frames` | POST | Aktualizuj listę klatek (po usunięciu/przywróceniu) |
+| `/api/sessions/{name}/centers` | POST | Zapisz środki fokus |
+| `/api/sessions/{name}/crop-preview` | POST | Podgląd przycinania (z custom_centers inline) |
+| `/api/sessions/{name}/video-preview` | POST | Podgląd wideo (miniatura) |
+| `/api/sessions/{name}/export` | POST | Eksport MP4/GIF/WebM/ZIP |
+| `/api/sessions/{name}/captions` | POST | Zapisz napisy |
+| `/api/sessions/{name}/captions/generate` | POST | Generuj napisy AI (LLM) |
 | `/api/presets` | GET | Presety formatów |
+| `/api/branding` | GET/POST | Konfiguracja znaku wodnego |
 | `/api/social-links` | GET | Linki social media |
 
 ## Licencja

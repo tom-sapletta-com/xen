@@ -1,3 +1,19 @@
+## [0.1.17] - 2026-02-19
+
+### Summary
+
+feat(docs): deep code analysis engine with 4 supporting modules
+
+### Docs
+
+- docs: update README
+
+### Other
+
+- update xeen/server.py
+- update xeen/templates/index.html
+
+
 ## [0.1.16] - 2026-02-19
 
 ### Summary

@@ -888,6 +888,12 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
       <button class="tool-btn success" onclick="selectMostDifferent()" title="Zaznacz klatki z największymi zmianami">
         <span class="icon">⚡</span> Największe zmiany
       </button>
+      <button class="tool-btn" onclick="selectFirstN()" title="Zaznacz pierwsze N klatek">
+        <span class="icon">🔢</span> Pierwsze N
+      </button>
+      <button class="tool-btn" onclick="selectTimeRange()" title="Zaznacz klatki z zakresu czasu">
+        <span class="icon">⏱️</span> Zakres czasu
+      </button>
       <div class="tools-divider"></div>
       <button class="tool-btn advanced" onclick="advancedSimilarity()" title="Zaawansowana analiza (wymaga dodatkowych pakietów)">
         <span class="icon">🧠</span> AI detekcja
@@ -983,6 +989,12 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
       <button class="tool-btn" onclick="copyCenterToAll()" title="Kopiuj bieżący środek do wszystkich klatek">
         <span class="icon">📋</span> Kopiuj do wszystkich
       </button>
+      <button class="tool-btn" onclick="interpolateCenters()" title="Interpoluj brakujące środki między zaznaczonymi">
+        <span class="icon">📈</span> Interpoluj
+      </button>
+      <button class="tool-btn danger" onclick="clearAllCenters()" title="Usuń wszystkie środki">
+        <span class="icon">🗑</span> Wyczyść środki
+      </button>
       <div class="tools-divider"></div>
       <button class="tool-btn advanced" onclick="advancedAutoCenter()" title="AI detekcja punktu zainteresowania">
         <span class="icon">🧠</span> AI auto-center
@@ -1019,9 +1031,15 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
       <button class="tool-btn" onclick="addCustomPreset()" title="Dodaj własny format">
         <span class="icon">➕</span> Własny format
       </button>
+      <button class="tool-btn" onclick="resetCropDefaults()" title="Przywróć domyślne ustawienia">
+        <span class="icon">↩️</span> Resetuj
+      </button>
       <div class="tools-divider"></div>
       <button class="tool-btn advanced" onclick="advancedSmartCrop()" title="AI smart crop (wymaga opencv)">
         <span class="icon">🧠</span> AI smart crop
+      </button>
+      <button class="tool-btn advanced" onclick="advancedUpscale()" title="AI upscale (wymaga realesrgan)">
+        <span class="icon">🧠</span> AI upscale
       </button>
     </div>
 
@@ -1207,6 +1225,12 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
       </button>
       <button class="tool-btn" onclick="addWatermark()" title="Dodaj znak wodny">
         <span class="icon">🌐</span> Znak wodny
+      </button>
+      <button class="tool-btn" onclick="openExportsFolder()" title="Otwórz folder eksportów">
+        <span class="icon">📂</span> Folder eksportów
+      </button>
+      <button class="tool-btn" onclick="copyShareURL()" title="Kopiuj link do sesji">
+        <span class="icon">🔗</span> Kopiuj link
       </button>
       <div class="tools-divider"></div>
       <button class="tool-btn advanced" onclick="advancedVideoExport()" title="FFmpeg zaawansowany (wymaga ffmpeg)">
@@ -1720,6 +1744,7 @@ function deleteFrame(idx) {
   selectedFrames = new Set([...selectedFrames].filter(x => x !== idx).map(x => x > idx ? x - 1 : x));
   renderFrameGrid();
   renderTrashList();
+  persistFrames();  // save to server
   toast(`Klatka #${idx + 1} w koszu — ↩ przywróć w koszu`);
 }
 
@@ -1735,6 +1760,7 @@ async function restoreFrame(i) {
   renderFrameGrid();
   updateTrashBadge();
   renderTrashList();
+  await persistFrames();  // save to server
   toast(`Klatka przywrócona na pozycję #${insertAt + 1}`);
 }
 
@@ -1756,6 +1782,21 @@ async function emptyFrameTrash() {
   updateTrashBadge();
   renderTrashList();
   toast('Kosz opróżniony');
+}
+
+async function persistFrames() {
+  if (!currentSession || !sessionData) return;
+  try {
+    await api(`/sessions/${currentSession}/update-frames`, {
+      method: 'POST',
+      body: {
+        frames: sessionData.frames,
+        selected_frames: [...selectedFrames].sort(),
+      },
+    });
+  } catch (e) {
+    console.error('Failed to persist frames:', e);
+  }
 }
 
 async function saveSelection() {
@@ -1871,6 +1912,31 @@ function selectMostDifferent() {
   
   renderFrameGrid();
   toast(`Zaznaczono ${selectedFrames.size} klatek z największymi zmianami (>${threshold.toFixed(1)}%)`);
+}
+
+function selectFirstN() {
+  const n = parseInt(prompt('Ile pierwszych klatek zaznaczyć?', '5'));
+  if (!n || n < 1 || !sessionData) return;
+  selectedFrames.clear();
+  for (let i = 0; i < Math.min(n, sessionData.frames.length); i++) selectedFrames.add(i);
+  renderFrameGrid();
+  toast(`Zaznaczono pierwsze ${selectedFrames.size} klatek`);
+}
+
+function selectTimeRange() {
+  if (!sessionData) return;
+  const dur = sessionData.duration || sessionData.frames.length;
+  const range = prompt(`Zakres czasu w sekundach (np. "2-8" z ${dur.toFixed(1)}s)`, `0-${Math.ceil(dur)}`);
+  if (!range) return;
+  const [from, to] = range.split('-').map(Number);
+  if (isNaN(from) || isNaN(to)) { toast('Nieprawidłowy zakres'); return; }
+  selectedFrames.clear();
+  sessionData.frames.forEach((f, i) => {
+    const t = f.timestamp || i;
+    if (t >= from && t <= to) selectedFrames.add(i);
+  });
+  renderFrameGrid();
+  toast(`Zaznaczono ${selectedFrames.size} klatek z zakresu ${from}-${to}s`);
 }
 
 // ─── Tab 2: Annotations ─────────────────────────────────────────────────────
@@ -2087,29 +2153,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAnnotateCanvas();
 });
 
-// ─── Tools: Tab 3 (Center) ──────────────────────────────────────────────────
-
-function centerToMiddle() {
-  if (!sessionData) return;
-  [...selectedFrames].forEach(idx => {
-    const f = sessionData.frames[idx];
-    if (f) centerMarks[idx] = { x: Math.round(f.width / 2), y: Math.round(f.height / 2) };
-  });
-  renderCenterPanel();
-  toast('Środek ustawiony na środek obrazu dla zaznaczonych klatek');
-}
-
-function copyCenterToAll() {
-  if (!sessionData) return;
-  const current = centerMarks[currentCenterFrame];
-  if (!current) { toast('Najpierw oznacz środek na bieżącej klatce'); return; }
-  [...selectedFrames].forEach(idx => {
-    centerMarks[idx] = { ...current };
-  });
-  renderCenterPanel();
-  toast(`Skopiowano środek (${current.x}, ${current.y}) do ${selectedFrames.size} klatek`);
-}
-
 // ─── Export Focus Mode Functions ───────────────────────────────────────────
 function updateExportFocusMode(mode) {
   currentFocusMode = mode;
@@ -2260,45 +2303,6 @@ function updatePadding(value) {
   updateVideoPreview();
 }
 
-// ─── Tools: Tab 3 (Crop) ────────────────────────────────────────────────────
-
-function previewAllPresets() {
-  toast('Podgląd wszystkich formatów — wkrótce');
-}
-
-function fitToContent() {
-  toast('Dopasowanie do treści — wymaga analizy OCR zawartości klatek');
-}
-
-function addCustomPreset() {
-  const w = parseInt(prompt('Szerokość (px):', '1080'));
-  const h = parseInt(prompt('Wysokość (px):', '1080'));
-  if (!w || !h) return;
-  const name = prompt('Nazwa formatu:', `custom_${w}x${h}`) || `custom_${w}x${h}`;
-  presets[name] = { width: w, height: h, label: name };
-  toast(`Dodano format ${name} (${w}×${h})`);
-}
-
-// ─── Tools: Tab 4 (Versions) ────────────────────────────────────────────────
-
-function compareVersionsSideBySide() {
-  toast('Porównanie bok-do-boku — wkrótce');
-}
-
-function downloadAllVersions() {
-  toast('Pobieranie wszystkich wersji — wkrótce');
-}
-
-// ─── Tools: Tab 5 (Publish) ─────────────────────────────────────────────────
-
-function exportAllFormats() {
-  toast('Eksport we wszystkich formatach — wkrótce');
-}
-
-function addWatermark() {
-  toast('Znak wodny — wkrótce');
-}
-
 // ─── Advanced Mode ──────────────────────────────────────────────────────────
 
 function toggleAdvancedMode(on) {
@@ -2306,22 +2310,6 @@ function toggleAdvancedMode(on) {
   document.querySelectorAll('.tool-btn.advanced').forEach(btn => {
     btn.style.display = on ? '' : 'none';
   });
-}
-
-function advancedSimilarity() {
-  toast('🧠 AI detekcja wymaga: pip install torch torchvision\nUżyj "make install" aby zainstalować');
-}
-function advancedAutoCenter() {
-  toast('🧠 AI auto-center wymaga: pip install torch torchvision\nUżyj "make install" aby zainstalować');
-}
-function advancedSmartCrop() {
-  toast('🧠 AI smart crop wymaga: pip install opencv-python-headless\nUżyj "make install" aby zainstalować');
-}
-function advancedUpscale() {
-  toast('🧠 AI upscale wymaga: pip install realesrgan\nUżyj "make install" aby zainstalować');
-}
-function advancedVideoExport() {
-  toast('🧠 Zaawansowany eksport wymaga: sudo apt install ffmpeg\nUżyj "make install" aby zainstalować');
 }
 
 // ─── Init advanced mode ─────────────────────────────────────────────────────
@@ -2523,6 +2511,49 @@ async function saveCenters() {
     body: { marks },
   });
   toast('Zapisano środki');
+}
+
+function interpolateCenters() {
+  const selected = [...selectedFrames].sort();
+  const marked = selected.filter(i => centerMarks[i]);
+  if (marked.length < 2) { toast('Potrzebujesz co najmniej 2 oznaczonych klatek do interpolacji'); return; }
+  let filled = 0;
+  for (let m = 0; m < marked.length - 1; m++) {
+    const a = marked[m], b = marked[m + 1];
+    const ca = centerMarks[a], cb = centerMarks[b];
+    const between = selected.filter(i => i > a && i < b && !centerMarks[i]);
+    between.forEach(i => {
+      const t = (i - a) / (b - a);
+      centerMarks[i] = { x: Math.round(ca.x + (cb.x - ca.x) * t), y: Math.round(ca.y + (cb.y - ca.y) * t) };
+      filled++;
+    });
+  }
+  renderCenterPanel();
+  toast(`Interpolowano ${filled} brakujących środków`);
+}
+
+function clearAllCenters() {
+  if (!confirm('Usunąć wszystkie oznaczone środki?')) return;
+  centerMarks = {};
+  renderCenterPanel();
+  toast('Środki wyczyszczone');
+}
+
+function centerToMiddle() {
+  [...selectedFrames].forEach(idx => {
+    const f = sessionData.frames[idx];
+    centerMarks[idx] = { x: Math.round(f.width / 2), y: Math.round(f.height / 2) };
+  });
+  renderCenterPanel();
+  toast('Środki ustawione na środek obrazu');
+}
+
+function copyCenterToAll() {
+  const cur = centerMarks[currentCenterFrame];
+  if (!cur) { toast('Najpierw ustaw środek na bieżącej klatce'); return; }
+  [...selectedFrames].forEach(idx => { centerMarks[idx] = { ...cur }; });
+  renderCenterPanel();
+  toast(`Skopiowano (${cur.x}, ${cur.y}) do ${selectedFrames.size} klatek`);
 }
 
 // ─── Tab 3: Crop Preview ────────────────────────────────────────────────────
@@ -3506,6 +3537,70 @@ async function generateCaptionsLLM() {
     btn.disabled = false;
     btn.textContent = '🤖 Generuj napisy AI';
   }
+}
+
+// ─── Crop Tab Tools ─────────────────────────────────────────────────────────
+function resetCropDefaults() {
+  currentFocusMode = 'screen';
+  currentZoomLevel = 1.0;
+  currentMousePadding = 20;
+  document.querySelectorAll('input[name="focusMode"]').forEach(r => { r.checked = r.value === 'screen'; });
+  const zs = document.getElementById('zoomSlider'); if (zs) zs.value = 1;
+  const zv = document.getElementById('zoomValue'); if (zv) zv.textContent = '1.0x';
+  const ps = document.getElementById('paddingSlider'); if (ps) ps.value = 20;
+  const pv = document.getElementById('paddingValue'); if (pv) pv.textContent = '20%';
+  document.getElementById('zoomControls').style.display = 'none';
+  syncConfigToURL();
+  loadCropPreview();
+  toast('Ustawienia przywrócone do domyślnych');
+}
+
+function previewAllPresets() {
+  toast('Podgląd wszystkich presetów — w przygotowaniu');
+}
+function fitToContent() {
+  toast('Dopasowanie do treści — w przygotowaniu (wymaga analizy obrazu)');
+}
+function addCustomPreset() {
+  const input = prompt('Podaj rozmiar (np. 800x600):', '800x600');
+  if (!input) return;
+  const [w, h] = input.split('x').map(Number);
+  if (!w || !h) { toast('Nieprawidłowy format — użyj WxH'); return; }
+  const key = `custom_${w}x${h}`;
+  presets[key] = { label: `Custom ${w}×${h}`, w, h };
+  activePreset = key;
+  renderPresetBars();
+  loadCropPreview();
+  toast(`Dodano własny preset ${w}×${h}`);
+}
+function advancedSmartCrop() { toast('AI Smart Crop — wymaga opencv-python: pip install opencv-python'); }
+function advancedUpscale() { toast('AI Upscale — wymaga realesrgan: pip install realesrgan'); }
+function advancedSimilarity() { toast('AI detekcja — wymaga scikit-image: pip install scikit-image'); }
+function advancedAutoCenter() { toast('AI auto-center — wymaga YOLO/SAM: w przygotowaniu'); }
+function advancedVideoExport() { toast('Zaawansowany eksport FFmpeg — w przygotowaniu'); }
+
+// ─── Publish Tab Tools ──────────────────────────────────────────────────────
+function openExportsFolder() {
+  if (!currentSession) { toast('Brak aktywnej sesji'); return; }
+  window.open(`/api/exports/`, '_blank');
+  toast('Folder eksportów otwarty');
+}
+
+function copyShareURL() {
+  const url = window.location.href;
+  navigator.clipboard.writeText(url).then(() => {
+    toast('Link skopiowany do schowka');
+  }).catch(() => {
+    prompt('Skopiuj link:', url);
+  });
+}
+
+function addWatermark() {
+  const chk = document.getElementById('publishWatermark');
+  if (chk) { chk.checked = true; wmToggle(); }
+  const fields = document.getElementById('wmFields');
+  if (fields) fields.style.display = 'block';
+  toast('Konfigurator znaku wodnego otwarty');
 }
 
 // ─── Toast ──────────────────────────────────────────────────────────────────

@@ -475,6 +475,27 @@ async def save_frame_selection(name: str, selection: FrameSelection):
     return {"ok": True, "selected": len(selection.selected_indices)}
 
 
+class FrameUpdate(BaseModel):
+    frames: list[dict]
+    selected_frames: list[int] | None = None
+
+
+@app.post("/api/sessions/{name}/update-frames")
+async def update_frames(name: str, req: FrameUpdate):
+    """Aktualizuj listę klatek (po usunięciu/przywróceniu)."""
+    meta_file = data_dir() / "sessions" / name / "session.json"
+    if not meta_file.exists():
+        raise HTTPException(404)
+    meta = json.loads(meta_file.read_text())
+    meta["frames"] = req.frames
+    meta["frame_count"] = len(req.frames)
+    if req.selected_frames is not None:
+        meta["selected_frames"] = req.selected_frames
+    meta_file.write_text(json.dumps(meta, indent=2))
+    logger.info(f"🗑️ **Frames updated** for session `{name}`: {len(req.frames)} frames")
+    return {"ok": True, "frame_count": len(req.frames)}
+
+
 # ─── API: Tab 2 - Center Marking ─────────────────────────────────────────────
 
 class CenterMark(BaseModel):
