@@ -1303,8 +1303,10 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
         <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
           🎥 Podgląd animacji &mdash; <span id="publishAnimLabel">pierwsze 3 klatki, loop</span>
         </div>
-        <div style="position:relative;display:inline-block;background:#000;border-radius:6px;overflow:hidden;min-width:180px;min-height:100px">
-          <img id="publishAnimImg" src="" alt="" style="max-width:100%;max-height:240px;display:block;object-fit:contain">
+        <div id="publishAnimBox" style="position:relative;display:inline-block;background:#000;border-radius:6px;overflow:hidden;min-width:180px;min-height:100px">
+          <img id="publishAnimImgA" src="" alt="" style="max-width:100%;max-height:240px;display:block;object-fit:contain;position:absolute;top:0;left:0;width:100%;height:100%;opacity:1;transition:none">
+          <img id="publishAnimImgB" src="" alt="" style="max-width:100%;max-height:240px;display:block;object-fit:contain;position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;transition:none">
+          <div style="max-width:100%;max-height:240px;min-width:180px;min-height:100px;visibility:hidden"></div>
           <div id="publishAnimSpinner" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)">
             <div class="spinner"></div>
           </div>
@@ -2795,17 +2797,19 @@ async function exportSession() {
 }
 
 // ─── Publish: Animated Frame Preview Loop ───────────────────────────────────
-let _publishAnimFrames = [];   // array of img src URLs (crop previews)
+let _publishAnimFrames = [];   // array of {src, frameIdx} objects
 let _publishAnimIdx = 0;
 let _publishAnimTimer = null;
+let _publishAnimActive = 'A';  // which img layer is currently visible
 
 async function initPublishPreview() {
   if (!currentSession || !sessionData) return;
 
-  const img = document.getElementById('publishAnimImg');
   const spinner = document.getElementById('publishAnimSpinner');
   const dots = document.getElementById('publishAnimDots');
   const label = document.getElementById('publishAnimLabel');
+  const imgA = document.getElementById('publishAnimImgA');
+  const imgB = document.getElementById('publishAnimImgB');
 
   spinner.style.display = 'flex';
   _publishAnimFrames = [];
@@ -2839,14 +2843,15 @@ async function initPublishPreview() {
       if (wmc.footer_text) wq += `&wm_text=${encodeURIComponent(wmc.footer_text)}&wm_tc=${encodeURIComponent(wmc.footer_color)}&wm_fs=${wmc.footer_font_size}`;
       wq += `&wm_bg=${encodeURIComponent(wmc.footer_bg)}`;
     }
-    _publishAnimFrames = result.previews.map(p =>
-      `/api/sessions/${currentSession}/preview/${p.filename}?${wq}&_t=${Date.now()}`
-    );
+    _publishAnimFrames = result.previews.map(p => ({
+      src: `/api/sessions/${currentSession}/preview/${p.filename}?${wq}&_t=${Date.now()}`,
+      frameIdx: p.index,
+    }));
   } catch (e) {
     // fallback: use raw frame thumbnails
     sel.forEach(idx => {
       const f = sessionData.frames[idx];
-      if (f) _publishAnimFrames.push(`/api/sessions/${currentSession}/frames/${f.filename}`);
+      if (f) _publishAnimFrames.push({ src: `/api/sessions/${currentSession}/frames/${f.filename}`, frameIdx: idx });
     });
   }
 
@@ -2857,28 +2862,88 @@ async function initPublishPreview() {
     `<div class="pub-anim-dot" id="pubDot${i}" style="width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .2s"></div>`
   ).join('');
 
-  // Show first frame, hide spinner
-  img.src = _publishAnimFrames[0];
-  img.onload = () => { spinner.style.display = 'none'; };
+  // Show first frame on layer A, hide spinner
+  imgA.style.transition = 'none';
+  imgA.style.opacity = '1';
+  imgB.style.transition = 'none';
+  imgB.style.opacity = '0';
+  imgA.src = _publishAnimFrames[0].src;
+  _publishAnimActive = 'A';
+  imgA.onload = () => { spinner.style.display = 'none'; };
   _publishAnimIdx = 0;
   updatePublishAnimDot(0);
   startPublishPreview();
 }
 
+function _getTransitionCss(fromIdx, toIdx) {
+  // Returns {type, duration} for the CSS transition between two frame indices
+  // transitions map: key = frame index of the DESTINATION frame
+  const tr = transitions[String(toIdx)] || transitions[toIdx];
+  if (!tr || tr.type === 'none') return { type: 'none', duration: 0 };
+  return { type: tr.type, duration: parseFloat(tr.duration) || 0.3 };
+}
+
 function startPublishPreview() {
   stopPublishPreview();
   const dur = parseFloat(document.getElementById('exportDuration')?.value || '0.5') * 1000;
-  _publishAnimTimer = setInterval(() => {
+
+  function showNextFrame() {
     if (_publishAnimFrames.length === 0) return;
-    _publishAnimIdx = (_publishAnimIdx + 1) % _publishAnimFrames.length;
-    const img = document.getElementById('publishAnimImg');
-    if (img) img.src = _publishAnimFrames[_publishAnimIdx];
-    updatePublishAnimDot(_publishAnimIdx);
-  }, Math.max(100, dur));
+    const nextIdx = (_publishAnimIdx + 1) % _publishAnimFrames.length;
+    const curFrame = _publishAnimFrames[_publishAnimIdx];
+    const nextFrame = _publishAnimFrames[nextIdx];
+    const tr = _getTransitionCss(curFrame.frameIdx, nextFrame.frameIdx);
+    const trDurMs = tr.type !== 'none' ? Math.round(tr.duration * 1000) : 0;
+
+    const imgA = document.getElementById('publishAnimImgA');
+    const imgB = document.getElementById('publishAnimImgB');
+    if (!imgA || !imgB) return;
+
+    // Determine which layer is active and which is the back layer
+    const [front, back] = _publishAnimActive === 'A' ? [imgA, imgB] : [imgB, imgA];
+    const nextActive = _publishAnimActive === 'A' ? 'B' : 'A';
+
+    // Preload next image on back layer (no transition yet)
+    back.style.transition = 'none';
+    back.style.opacity = '0';
+    back.src = nextFrame.src;
+
+    const doSwitch = () => {
+      _publishAnimIdx = nextIdx;
+      updatePublishAnimDot(nextIdx);
+      if (tr.type === 'none' || trDurMs === 0) {
+        // Hard cut
+        front.style.transition = 'none';
+        front.style.opacity = '0';
+        back.style.transition = 'none';
+        back.style.opacity = '1';
+      } else {
+        // CSS crossfade (works for fade, blur, pixelize, slide — approximated as fade in preview)
+        back.style.transition = `opacity ${tr.duration}s ease-in-out`;
+        back.style.opacity = '1';
+        front.style.transition = `opacity ${tr.duration}s ease-in-out`;
+        front.style.opacity = '0';
+      }
+      _publishAnimActive = nextActive;
+      // Schedule next frame after display duration + transition
+      _publishAnimTimer = setTimeout(showNextFrame, Math.max(100, dur));
+    };
+
+    // Wait for back image to load before switching
+    if (back.complete && back.naturalWidth > 0) {
+      doSwitch();
+    } else {
+      back.onload = doSwitch;
+      back.onerror = doSwitch;
+    }
+  }
+
+  // Start loop after first display duration
+  _publishAnimTimer = setTimeout(showNextFrame, Math.max(100, dur));
 }
 
 function stopPublishPreview() {
-  if (_publishAnimTimer) { clearInterval(_publishAnimTimer); _publishAnimTimer = null; }
+  if (_publishAnimTimer) { clearTimeout(_publishAnimTimer); _publishAnimTimer = null; }
 }
 
 function restartPublishPreview() {

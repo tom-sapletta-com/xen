@@ -1188,10 +1188,11 @@ def _ffmpeg_xfade_export(previews, tr_map, preview_dir, output_path,
         out_label = f'xf{i}' if i < n - 1 else 'out'
 
         if tr_type == "none":
-            # No transition: just concatenate (use xfade with duration=0 is invalid;
-            # use concat filter instead for this pair)
+            # Hard cut: use xfade with a near-zero duration (0.001s) so we stay
+            # in a pure xfade filtergraph without mixing concat filters.
             filter_parts.append(
-                f'[{prev_label}][v{i}]concat=n=2:v=1:a=0[{out_label}]'
+                f'[{prev_label}][v{i}]xfade=transition=fade:'
+                f'duration=0.001:offset={cumulative_offset:.3f}[{out_label}]'
             )
         else:
             xfade_name = XFADE_MAP.get(tr_type, "fade")
@@ -1199,8 +1200,6 @@ def _ffmpeg_xfade_export(previews, tr_map, preview_dir, output_path,
                 f'[{prev_label}][v{i}]xfade=transition={xfade_name}:'
                 f'duration={tr_dur:.3f}:offset={cumulative_offset:.3f}[{out_label}]'
             )
-            # After xfade the output stream is shorter by tr_dur, so next offset
-            # must account for that — already handled by subtracting tr_dur above.
 
         prev_label = out_label
 
@@ -1287,7 +1286,6 @@ async def export_session(name: str, req: ExportRequest):
         gif_frames = []
         gif_durations = []
         frame_ms = int(req.duration_per_frame * 1000)
-        tr_frame_ms = max(40, 1000 // max(req.fps, 1))  # ms per transition frame
 
         for i, img in enumerate(raw_images):
             gif_frames.append(img)
@@ -1297,10 +1295,14 @@ async def export_session(name: str, req: ExportRequest):
                 next_idx = previews[i + 1]["index"]
                 tr_cfg = tr_map.get(str(next_idx))
                 if tr_cfg and tr_cfg.get("type", "none") != "none":
+                    tr_dur = float(tr_cfg.get("duration", 0.3))
                     t_frames = _make_transition_frames(
                         img, raw_images[i + 1],
-                        tr_cfg["type"], float(tr_cfg.get("duration", 0.3)), req.fps
+                        tr_cfg["type"], tr_dur, req.fps
                     )
+                    # Spread the transition duration evenly across generated frames
+                    n_tr = len(t_frames)
+                    tr_frame_ms = max(20, int(tr_dur * 1000 / n_tr)) if n_tr else 40
                     for tf in t_frames:
                         gif_frames.append(tf)
                         gif_durations.append(tr_frame_ms)
